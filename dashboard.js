@@ -724,12 +724,9 @@
       const container = document.getElementById('taskQueueContainer');
       if (!container) return;
       
-      const categories = {
-        data_gaps: { title: '🔴 Priority 1: Data Gap Resolution', color: 'red' },
-        expansion: { title: '🟡 Priority 2-3: Source Expansion', color: 'yellow' },
-        category: { title: '🔵 Priority 4: Category Gaps', color: 'blue' },
-        peptides: { title: '🟣 Priority 5: Peptide Database', color: 'purple' },
-        quality: { title: '⚪ Priority 6: Data Quality', color: 'gray' }
+      const owners = {
+        jeff: { title: '🤖 Jeff (AI Agent)', color: 'cyan', emoji: '🤖' },
+        maureen: { title: '👩‍💻 Maureen (Research)', color: 'pink', emoji: '👩‍💻' }
       };
       
       const statusColors = {
@@ -737,6 +734,7 @@
         approved: 'green',
         running: 'blue',
         complete: 'emerald',
+        completed: 'emerald',
         failed: 'red',
         rejected: 'gray'
       };
@@ -746,47 +744,64 @@
         approved: '✅',
         running: '🔄',
         complete: '✓',
+        completed: '✓',
         failed: '❌',
         rejected: '🚫'
       };
       
-      // Group tasks by category
-      const grouped = {};
+      // Group tasks by owner first
+      const byOwner = {};
       tasks.forEach(task => {
-        const cat = task.category || 'other';
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(task);
+        const owner = task.owner || 'jeff';
+        if (!byOwner[owner]) byOwner[owner] = [];
+        byOwner[owner].push(task);
       });
       
       let html = '';
       
-      for (const [catKey, catInfo] of Object.entries(categories)) {
-        const catTasks = grouped[catKey] || [];
-        if (catTasks.length === 0) continue;
+      // Render each owner's section
+      for (const [ownerKey, ownerInfo] of Object.entries(owners)) {
+        const ownerTasks = byOwner[ownerKey] || [];
+        if (ownerTasks.length === 0) continue;
+        
+        const pendingCount = ownerTasks.filter(t => t.status === 'pending').length;
+        const completeCount = ownerTasks.filter(t => t.status === 'complete' || t.status === 'completed').length;
         
         html += `
-          <div class="mb-6">
-            <h3 class="text-lg font-semibold mb-3 text-${catInfo.color}-400">${catInfo.title}</h3>
+          <div class="mb-8">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-${ownerInfo.color}-500/30">
+              <h3 class="text-xl font-bold text-${ownerInfo.color}-400">${ownerInfo.title}</h3>
+              <div class="flex gap-3 text-sm">
+                <span class="text-gray-400">⏳ ${pendingCount} pending</span>
+                <span class="text-emerald-400">✓ ${completeCount} done</span>
+              </div>
+            </div>
             <div class="space-y-2">
         `;
         
-        for (const task of catTasks) {
+        for (const task of ownerTasks) {
           const statusColor = statusColors[task.status] || 'gray';
           const statusIcon = statusIcons[task.status] || '?';
           const isActionable = task.status === 'pending';
-          const isComplete = task.status === 'complete';
+          const isComplete = task.status === 'complete' || task.status === 'completed';
           const isRunning = task.status === 'running';
           
+          const catColor = task.category === 'pipeline' ? 'purple' : 
+                          task.category === 'research' ? 'blue' : 
+                          task.category === 'data_gaps' ? 'red' : 
+                          task.category === 'expansion' ? 'yellow' : 'gray';
+          
           html += `
-            <div class="task-card flex items-start gap-3 p-3 bg-gray-700/30 rounded border-l-2 border-${catInfo.color}-500 ${isComplete ? 'opacity-60' : ''}">
+            <div class="task-card flex items-start gap-3 p-3 bg-gray-700/30 rounded border-l-2 border-${ownerInfo.color}-500 ${isComplete ? 'opacity-60' : ''}">
               <div class="flex-1">
                 <div class="flex items-center gap-2">
                   <span class="text-${statusColor}-400">${statusIcon}</span>
                   <span class="font-medium ${isComplete ? 'line-through' : ''}">${task.title}</span>
+                  ${task.category ? `<span class="text-xs px-2 py-0.5 rounded bg-${catColor}-500/20 text-${catColor}-300">${task.category}</span>` : ''}
                 </div>
                 <p class="text-sm text-gray-400 mt-1">${task.description || ''}</p>
                 <div class="flex gap-4 mt-2 text-xs">
-                  ${task.estimated_products ? `<span class="text-${catInfo.color}-400">📊 ${task.estimated_products.toLocaleString()} products</span>` : ''}
+                  ${task.estimated_products ? `<span class="text-${ownerInfo.color}-400">📊 ${task.estimated_products.toLocaleString()} products</span>` : ''}
                   ${task.estimated_time ? `<span class="text-gray-500">⏱️ ${task.estimated_time}</span>` : ''}
                   ${task.difficulty ? `<span class="text-gray-500">${task.difficulty === 'easy' ? '🟢' : task.difficulty === 'medium' ? '🟡' : '🔴'} ${task.difficulty}</span>` : ''}
                 </div>
