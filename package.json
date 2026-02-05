@@ -1,0 +1,13 @@
+{
+  "name": "aviado-supplement-dashboard",
+  "version": "1.0.0",
+  "description": "Project management dashboard for Aviado Supplement Database",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  },
+  "keywords": ["aviado", "supplements", "dashboard"],
+  "author": "Aviado",
+  "license": "UNLICENSED",
+  "private": true
+}

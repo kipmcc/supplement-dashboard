@@ -1,0 +1,345 @@
+🖼️ Image Enrichment Pipeline
+══════════════════════════════════════════════════
+Batch size: 100
+OpenAI verification: enabled
+══════════════════════════════════════════════════
+
+Processing 100 products with UPCs...
+
+
+📦 [2] Solgar - Solgar, Sleep & Stress Support, 60 Vegetable Capsu
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/92b6ef69-01f4-4552-83cc-4a2...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [3] Carlson - Vitamin A 4,500 mcg RAE Palmitate (15,000 IU)
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/5dc72a4b-3c0d-466b-9df6-52d...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [4] Carlson - Vitamin A 10,000 IU (3,000 mcg RAE)
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/9ac0d93f-3275-4984-87b7-463...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [5] Bluebonnet - Bluebonnet - Vitamin D3 2000 IU
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/0e3aacf5-448c-4e17-8336-6ae...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [6] EVLution Nutrition - Trans4orm
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/08472444-f45a-4226-9ede-21a...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [7] Flora - Flora Super 5 Lozenge Probiotic 60 Lozenges
+  ❌ No image candidates found
+
+📦 [8] Country Life - Country Life - Quercetin + D3
+  ❌ No image candidates found
+
+📦 [9] Nature Made - Multi For Him
+  ❌ No image candidates found
+
+📦 [10] Centrum - Centrum Silver Adults 50+
+  ❌ No image candidates found
+
+📦 [11] Paradise Herbs - Paradise Herbs, Whole Man, Men's Libido Vitality F
+  ❌ No image candidates found
+
+📦 [12] New Chapter - New Chapter - Women's Daily Probiotic
+  ❌ No image candidates found
+
+📦 [13] NATURELO Premium Supplements - NATURELO Premium Supplements - Prenatal Multivitam
+  ❌ No image candidates found
+
+📦 [14] DaVinci Laboratories - A-D-K 10
+  ❌ No image candidates found
+
+📦 [15] Natural Factors - Natural Factors, Stress-Relax®, Melatonin, 5 mg, 9
+  ❌ No image candidates found
+
+📦 [16] OLLY - The Perfect Women's Multi Blissful Berry
+  ❌ No image candidates found
+
+📦 [17] Irwin Naturals - Irwin Naturals, Brain Awake Red®, 60 Liquid Soft-G
+  ❌ No image candidates found
+
+📦 [18] NaturesPlus - Children's Chewable Multi-Vitamin & Mineral Supple
+  ❌ No image candidates found
+
+📦 [19] Emerald Laboratories - CoEnzymated Men's 45+ Multi Vit-A-Min
+  ❌ No image candidates found
+
+📦 [20] Nordic Naturals - Nordic Naturals - Ultimate Omega Lemon
+  ❌ No image candidates found
+
+📦 [21] OLLY - Kids Multi Gummy Worms Sour Fruity Punch
+  ❌ No image candidates found
+
+📦 [22] Source Naturals - Huperzine A 200 mg
+  ❌ No image candidates found
+
+📦 [23] AN Amazing Nutrition Amazing Formulas - AN Amazing Nutrition Amazing Formulas - Calcium wi
+  ❌ No image candidates found
+
+📦 [24] Nature Made - Nature Made - Triple Omega
+  ❌ No image candidates found
+
+📦 [25] Source Naturals - Huperzine A 200 mg
+  ❌ No image candidates found
+
+📦 [26] Nature's Bounty - Nature's Bounty - Vitamin C & D3
+  ❌ No image candidates found
+
+📦 [27] Source Naturals - Huperzine A
+  ❌ No image candidates found
+
+📦 [28] Pure Encapsulations - Pure Encapsulations® Vitamin B12
+  ❌ No image candidates found
+
+📦 [29] Vitabase - Vitabase - Calcium
+  ❌ No image candidates found
+
+📦 [30] Culturelle - Probiotic + Multivitamin Chewables Natural Fruit P
+  ❌ No image candidates found
+
+📦 [31] California Natural - California Natural, Pick Me Up, 60 Tablets
+  ❌ No image candidates found
+
+📦 [32] Source Naturals - Activated Quercetin
+  ❌ No image candidates found
+
+📦 [33] Solgar - Iron-Free Formula VM-75
+  ❌ No image candidates found
+
+📦 [34] Vibrant Health - Vibrant Health - Maximum Vibrance Vanilla Bean
+  ❌ No image candidates found
+
+📦 [35] Organic India - Organic India - Psyllium Pre & Probiotic Fiber Cin
+  ❌ No image candidates found
+
+📦 [36] Sun Chlorella - Sun-Chlorella A 500 mg
+  ❌ No image candidates found
+
+📦 [37] Natural Factors - MultiFactors Women's 50+
+  ❌ No image candidates found
+
+📦 [38] Nature's Truth - Extra Strength Melatonin 10 mg Gummies Natural Ber
+  ❌ No image candidates found
+
+📦 [39] Life Extension - Huperzine A 200 mcg
+  ❌ No image candidates found
+
+📦 [40] Source Naturals - Wellness Fizz Natural Tangerine Flavor
+  ❌ No image candidates found
+
+📦 [41] Flora - Flora Toddler's Probiotic Powder 75g
+  ❌ No image candidates found
+
+📦 [42] vitafusion GOODNESS - vitafusion GOODNESS - Magnesium Tropical Citrus
+  ❌ No image candidates found
+
+📦 [43] Organic Traditions - Organic Traditions Spirulina Powder 150g
+  ❌ No image candidates found
+
+📦 [44] Nature's Life - Nature's Life - Zinc 30 mg
+  ❌ No image candidates found
+
+📦 [45] Nuun - Immunity Blueberry Tangerine
+  ❌ No image candidates found
+
+📦 [46] Carlson - A 25,000 IU (7,500 mcg RAE) & D 1,000 IU (25 mcg)
+  ❌ No image candidates found
+
+📦 [47] Airborne Original - Airborne Original Very Berry
+  ❌ No image candidates found
+
+📦 [48] Codeage - Five A Day
+  ❌ No image candidates found
+
+📦 [49] Bluebonnet - Bluebonnet - Calcium Magnesium Zinc Softgels
+  ❌ No image candidates found
+
+📦 [50] Source Naturals - L-Proline L-Lysine 275 mg / 275 mg
+  ❌ No image candidates found
+
+📦 [51] Nature Made - Nature Made - Fish Oil Pearls
+  ❌ No image candidates found
+
+📦 [52] Nature's Bounty - Nature's Bounty - Fish Oil + D3
+  ❌ No image candidates found
+
+📦 [53] Protocol for Life Balance - Protocol For Life Balance - High Potency D3 10,000
+  ❌ No image candidates found
+
+📦 [54] Source Naturals - Source Naturals PABA -- 100 mg - 250 Tablets
+  ❌ No image candidates found
+
+📦 [55] OL Olympian Labs Performance Sports Nutrition - A-AKG Powder Unflavored
+  ❌ No image candidates found
+
+📦 [56] Nature's Way - Nature's Way - Alive! Men's 50+ Gummy Vitamins
+  ❌ No image candidates found
+
+📦 [57] Enzymedica - Enzymedica SerraGold 60 Capsules
+  ❌ No image candidates found
+
+📦 [58] Airborne - Airborne Original Very Berry
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://pics.walgreens.com/prodimg/371185/450.jpg...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [59] Bayer - Proactive 65+ for Men & Women
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://pics.walgreens.com/prodimg/588643/450.jpg...
+  ❌ Failed verification
+
+📦 [60] Deva - DEVA - Vegan Ceramide Supplement
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/2cd05c35-9909-4b1b-bd1e-23e...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [61] Nature Made - Nature Made - Triple Probiotic
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: http://pics.drugstore.com/prodimg/342031/450.jpg...
+  ⚠️ Error: HTTP 404
+
+📦 [62] Life Extension - Life Extension Mix Tablets without Copper
+  🔍 Found 1 candidate(s)
+  ⬇️ Trying upcitemdb: https://i5.walmartimages.com/asr/32695694-ac1c-4d57-8780-61c...
+  ✅ Verified as supplement label
+  ✅ Uploaded: https://xijsvdhffiuxpepswnyb.supabase.co/storage/v1/object/p
+
+📦 [63] Bayer - Men's Health Formula
+  ❌ No image candidates found
+
+📦 [64] Sun Chlorella - Sun Chlorella A
+  ❌ No image candidates found
+
+📦 [65] Tropical Oasis - Mega Multiple Vitamin Mineral Tropical Plus
+  ❌ No image candidates found
+
+📦 [66] RidgeCrest Herbals - RidgeCrest Herbals, Blood Pressure Formula™, 120 C
+  ❌ No image candidates found
+
+📦 [67] Pure Encapsulations - Pure Encapsulations Vitamin D3 Liquid Schweiz (35x
+  ❌ No image candidates found
+
+📦 [68] Source Naturals - N-A-G 500 mg
+  ❌ No image candidates found
+
+📦 [69] NaturesPlus - Source of Life Multi-Vitamin & Mineral with Whole 
+  ❌ No image candidates found
+
+📦 [70] NOW Foods - NOW Foods, Omega 3-6-9, 250 Softgels
+  ❌ No image candidates found
+
+📦 [71] Source Naturals - Vitamin D-3
+  ❌ No image candidates found
+
+📦 [72] Dr. Mercola - Vitamins A 5,000 IU D3 5,000 IU K2 180 mcg
+  ❌ No image candidates found
+
+📦 [73] Garden of Life - Raw Organic Perfect Food Green Superfood Juiced Gr
+  ❌ No image candidates found
+
+📦 [74] Nature's Truth - Black Elderberry + Vitamin C, Zinc Gummies Natural
+  ❌ No image candidates found
+
+📦 [75] Vitanica - Lysine Extra
+  ❌ No image candidates found
+
+📦 [76] KAL Dinosaurs - Relax-a-Saurus Grape
+  ❌ No image candidates found
+
+📦 [77] Klean Athlete - Klean Multivitamin
+  ❌ No image candidates found
+
+📦 [78] New Chapter - New Chapter - Wholemega Fish Oil
+  ❌ No image candidates found
+
+📦 [79] DaVinci Laboratories - Chewable B12-MC
+  ❌ No image candidates found
+
+📦 [80] Sun Chlorella - Sun-Chlorella A 200 mg
+  ❌ No image candidates found
+
+📦 [81] NutriCology - NutriCology - Magnesium Citrate
+  ❌ No image candidates found
+
+📦 [82] Nature Made - Mutli for Him plus Omega-3s Adult Gummies
+  ❌ No image candidates found
+
+📦 [83] Nature's Bounty - Nature's Bounty - Probiotic CD
+  ❌ No image candidates found
+
+📦 [84] Metamucil - Metamucil - Psyllium Super Fiber Powder Orange Sug
+  ❌ No image candidates found
+
+📦 [85] Source Naturals - Source Naturals, Vegan True®, Melatonin, Orange, 6
+  ❌ No image candidates found
+
+📦 [86] NatureWise - Green Coffee Bean Extract 800
+  ❌ No image candidates found
+
+📦 [87] Dr. Mercola - Dr. Mercola - Organic Curcumin Extract
+  ❌ No image candidates found
+
+📦 [88] OLLY - Teen Girl Multi Berry Melon Besties
+  ❌ No image candidates found
+
+📦 [89] MegaFood - MegaFood, Thyroid Strength, 90 Tablets
+  ❌ No image candidates found
+
+📦 [90] OLLY - Flawless Complexion Berry Fresh
+  ❌ No image candidates found
+
+📦 [91] Nordic Naturals - Nordic Naturals - Ultimate Omega + CoQ10
+  ❌ No image candidates found
+
+📦 [92] Pure Encapsulations - Men's Nutrients
+  ❌ No image candidates found
+
+📦 [93] Life Extension - Life Extension Gamma E Mixed Tocopherols & Tocotri
+  ❌ No image candidates found
+
+📦 [94] Nature's Way - Alive! Immune with Elderberry
+  ❌ No image candidates found
+
+📦 [95] Source Naturals - Theanine Serene
+  ❌ No image candidates found
+
+📦 [96] NaturesPlus - Children's Chewable Multi-Vitamin & Mineral Supple
+  ❌ No image candidates found
+
+📦 [97] Carlson - Cod Liver Oil Gems Low Vitamin A Natural Lemon Fla
+  ❌ No image candidates found
+
+📦 [98] NatureWise - Vitamin D3 25 mcg (1,000 IU)
+  ❌ No image candidates found
+
+📦 [99] Bayer - Men's 50+ Complete Multivitamin
+  ❌ No image candidates found
+
+📦 [100] OmneDiem - Histamine Digest 15,000 HDU
+  ❌ No image candidates found
+
+📦 [101] Life Extension - Life Extension - Whole Grape Extract
+  ❌ No image candidates found
+
+══════════════════════════════════════════════════
+📊 Summary:
+   Processed: 100
+   Found candidates: 9
+   Verified: 8
+   Uploaded: 8
+   Failed: 92
+   Sources: {"upcitemdb":8}
