@@ -147,7 +147,7 @@ function buildPanel(sidebar) {
   const sec = document.createElement('div');
   sec.id = 'af-cloud';
   sec.innerHTML = `<style>
-#af-cloud{padding:8px 16px 12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:#333;margin-top:44px}
+#af-cloud{padding:8px 16px 12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:#333;margin-top:40px}
 #af-cloud .hdr{font-weight:700;font-size:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 #af-cloud .btn{padding:2px 8px;border-radius:3px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:10px;color:#374151}
 #af-cloud .btn:hover{background:#f3f4f6}
@@ -169,8 +169,7 @@ function buildPanel(sidebar) {
 #af-cloud .act-bar{display:flex;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb}
 #af-cloud .act-bar .btn{flex:1;padding:5px;font-size:11px;text-align:center}
 </style>
-<div class="hdr">☁️ Cloud Diagrams <button class="btn" onclick="_af.refresh()">↻</button></div>
-<div class="flt"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()"/></div>
+<div class="flt" style="display:flex;gap:4px;align-items:center"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()" style="flex:1"/><button class="btn" onclick="_af.refresh()">↻</button></div>
 <div id="af-lst"><div class="emp">Loading...</div></div>
 <div id="af-sts" class="sts"></div>
 <div class="act-bar">
