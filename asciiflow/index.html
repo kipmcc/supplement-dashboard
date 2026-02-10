@@ -39,12 +39,18 @@
     body.sidebar-open #sidebar-toggle { left: var(--sidebar-w, 380px); }
     body.sidebar-collapsed #sidebar-toggle { left: 0px; }
 
-    /* Sidebar collapse */
-    body.sidebar-collapsed .MuiDrawer-root,
+    /* Sidebar collapse — target the MUI Paper sidebar */
+    body.sidebar-collapsed .MuiPaper-root,
+    body.sidebar-collapsed [class*="MuiPaper-root"],
     body.sidebar-collapsed [class*="MuiDrawer"] {
-      transform: translateX(calc(-1 * var(--sidebar-w, 380px))) !important;
+      transform: translateX(-420px) !important;
+      transition: transform 0.25s ease !important;
     }
-    body.sidebar-collapsed #af-cloud { display: none; }
+    body.sidebar-open .MuiPaper-root,
+    body.sidebar-open [class*="MuiPaper-root"] {
+      transition: transform 0.25s ease !important;
+    }
+    body.sidebar-collapsed #aviflow-header { display: none; }
   </style>
   <script defer src="asciiflow.bundle.js"></script>
 </head>
