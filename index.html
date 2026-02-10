@@ -4,19 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aviado Supplement Database Dashboard</title>
-  <!-- Auth check - redirect to login if not authenticated -->
-  <script>
-    (async function() {
-      try {
-        const res = await fetch('/api/verify');
-        if (!res.ok) {
-          window.location.href = '/login.html';
-        }
-      } catch (e) {
-        window.location.href = '/login.html';
-      }
-    })();
-  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -48,7 +35,7 @@
       <!-- Top row: Logo and Refresh -->
       <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-2 sm:gap-3">
-          <img src="aviado-logo.png" alt="Aviado" class="h-12 sm:h-16 w-auto">
+          <img src="aviado-logo.png" alt="Aviado" class="h-6 sm:h-8 w-auto">
           <div>
             <h1 class="text-lg sm:text-2xl font-bold text-white">Supplement Database</h1>
             <p class="text-gray-400 text-xs sm:text-sm hidden sm:block">Project Management Dashboard</p>
@@ -73,11 +60,11 @@
         <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           ✅ Tasks
         </button>
-        <button onclick="switchTab('mobile')" id="tab-mobile" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
-          📱 Mobile MVP
+        <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          🔄 Pipeline
         </button>
-        <button onclick="switchTab('content')" id="tab-content" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
-          📝 Content
+        <button onclick="switchTab('asciiflow')" id="tab-asciiflow" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          ✏️ Diagrams
         </button>
       </div>
     </div>
@@ -100,18 +87,19 @@
       document.getElementById('content-' + tabName).classList.add('active');
       
       // Load data when switching tabs
-      if (tabName === 'tasks') {
-        if (window.loadOngoingTasks) window.loadOngoingTasks();
-        if (window.loadTaskQueue) window.loadTaskQueue();
+      if (tabName === 'tasks' && window.loadTaskQueue) {
+        window.loadTaskQueue();
       }
       if (tabName === 'projects' && window.loadProjects) {
         window.loadProjects();
       }
-      if (tabName === 'mobile' && window.loadMobileMVP) {
-        window.loadMobileMVP();
+      if (tabName === 'pipeline' && window.loadPipeline) {
+        window.loadPipeline();
       }
-      if (tabName === 'content' && window.loadContentPipeline) {
-        window.loadContentPipeline();
+      if (tabName === 'asciiflow') {
+        // Resize iframe on tab switch
+        const iframe = document.getElementById('asciiflow-iframe');
+        if (iframe) iframe.style.height = (window.innerHeight - 220) + 'px';
       }
     }
   </script>
@@ -150,20 +138,7 @@
       </div>
     </section>
 
-    <!-- Section 2: Data Gap Trends (Priority View) -->
-    <section class="mb-6 sm:mb-8">
-      <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
-        <span class="mr-2">📉</span> Data Gap Trends
-      </h2>
-      <div class="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-        <div id="dataGapsChart" class="h-48 sm:h-64">
-          <canvas id="dataGapsCanvas"></canvas>
-        </div>
-        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
-      </div>
-    </section>
-
-    <!-- Section 3: Data Coverage -->
+    <!-- Section 2: Data Coverage -->
     <section class="mb-6 sm:mb-8">
       <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
         <span class="mr-2">📈</span> Data Coverage
@@ -209,7 +184,20 @@
       </div>
     </section>
 
-    <!-- Section: Enrichment Queue -->
+    <!-- Section 6: Data Gap Trends -->
+    <section class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center">
+        <span class="mr-2">📉</span> Data Gap Trends
+      </h2>
+      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div id="dataGapsChart" class="h-64">
+          <canvas id="dataGapsCanvas"></canvas>
+        </div>
+        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
+      </div>
+    </section>
+
+    <!-- Section 6b: Enrichment Queue -->
     <section class="mb-8">
       <h2 class="text-xl font-semibold mb-4 flex items-center">
         <span class="mr-2">🎯</span> Enrichment Queue
@@ -371,6 +359,53 @@
               <div class="flex justify-between"><span class="text-gray-300">Telehealth Clinics</span><span class="text-blue-400">5</span></div>
               <div class="flex justify-between"><span class="text-gray-300">Research Vendors</span><span class="text-yellow-400">9</span></div>
               <div class="flex justify-between"><span class="text-gray-300">International</span><span class="text-purple-400">3</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 10: Category Gaps -->
+    <section class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center">
+        <span class="mr-2">📊</span> Category Coverage Gaps
+      </h2>
+      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div id="categoryGaps" class="space-y-3">
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span>Omega-3 Fish Oils</span>
+              <span class="text-red-400">79 / 500 (16%)</span>
+            </div>
+            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-red-500 to-red-600" style="width: 16%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span>Probiotics</span>
+              <span class="text-yellow-400">184 / 400 (46%)</span>
+            </div>
+            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-yellow-500 to-yellow-600" style="width: 46%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span>Senior/50+ Formulas</span>
+              <span class="text-red-400">20 / 200 (10%)</span>
+            </div>
+            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-red-500 to-red-600" style="width: 10%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span>Prenatal Vitamins</span>
+              <span class="text-yellow-400">142 / 200 (71%)</span>
+            </div>
+            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-yellow-500 to-green-500" style="width: 71%"></div>
             </div>
           </div>
         </div>
@@ -539,27 +574,6 @@
         </p>
       </div>
 
-      <!-- Task Filter Tabs -->
-      <div class="flex gap-2 mb-4 border-b border-gray-700 pb-3">
-        <button onclick="filterTasks('open')" id="task-filter-open" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-blue-600 text-white border-b-2 border-blue-400">
-          📋 Open Tasks
-        </button>
-        <button onclick="filterTasks('completed')" id="task-filter-completed" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
-          ✅ Completed
-        </button>
-        <button onclick="filterTasks('ongoing')" id="task-filter-ongoing" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
-          🔄 Ongoing
-        </button>
-        <button onclick="filterTasks('all')" id="task-filter-all" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
-          📑 All
-        </button>
-      </div>
-
-      <!-- Ongoing Tasks Container (shown when Ongoing tab active) -->
-      <div id="ongoingTasksContainer" class="space-y-3 hidden">
-        <div class="text-gray-400 text-sm">Loading ongoing tasks...</div>
-      </div>
-
       <!-- Dynamic Task Queue -->
       <div id="taskQueueContainer" class="space-y-4">
         <div class="text-gray-400 loading">Loading task queue...</div>
@@ -574,113 +588,122 @@
 
     </div><!-- End Tasks Tab -->
 
-    <!-- ==================== MOBILE MVP TAB ==================== -->
-    <div id="content-mobile" class="tab-content">
-      <section>
-        <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-semibold flex items-center">
-            <span class="mr-2">📱</span> Mobile MVP Checklist
-          </h2>
-          <div class="flex gap-2">
-            <span id="mvp-progress" class="text-sm text-gray-400">Loading...</span>
-            <button onclick="loadMobileMVP()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-              🔄 Refresh
-            </button>
-          </div>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="mb-6 bg-gray-800 rounded-lg p-4">
-          <div class="flex justify-between text-sm mb-2">
-            <span>Overall Progress</span>
-            <span id="mvp-percent">0%</span>
-          </div>
-          <div class="w-full bg-gray-700 rounded-full h-3">
-            <div id="mvp-bar" class="bg-green-500 h-3 rounded-full progress-bar" style="width: 0%"></div>
-          </div>
-          <div class="flex justify-between text-xs text-gray-400 mt-2">
-            <span id="mvp-complete">0 complete</span>
-            <span id="mvp-total">0 total</span>
-          </div>
-        </div>
-
-        <!-- Filter by Priority -->
-        <div class="mb-4 flex gap-2 flex-wrap">
-          <button onclick="filterMVP('all')" class="mvp-filter active px-3 py-1 bg-blue-600 rounded text-sm" data-filter="all">All</button>
-          <button onclick="filterMVP('P0')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P0">🔴 P0 Critical</button>
-          <button onclick="filterMVP('P1')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P1">🟡 P1 High</button>
-          <button onclick="filterMVP('P2')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P2">🟢 P2 Nice-to-Have</button>
-        </div>
-
-        <!-- MVP Items by Category -->
-        <div id="mvp-items" class="space-y-6">
-          <div class="text-gray-400 text-center py-8">Loading MVP items...</div>
-        </div>
-      </section>
-    </div><!-- End Mobile MVP Tab -->
-
     <!-- ==================== CONTENT PIPELINE TAB ==================== -->
-    <div id="content-content" class="tab-content">
-      <section>
-        <h2 class="text-xl font-semibold mb-6 flex items-center">
-          <span class="mr-2">📝</span> Content Pipeline
-        </h2>
+    <div id="content-pipeline" class="tab-content">
 
-        <!-- Pipeline Summary -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="text-gray-400 text-sm">Queue Total</div>
-            <div id="contentQueueTotal" class="text-3xl font-bold text-white">--</div>
-          </div>
-          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="text-gray-400 text-sm">Draft</div>
-            <div id="contentDraft" class="text-3xl font-bold text-yellow-400">--</div>
-          </div>
-          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="text-gray-400 text-sm">Scheduled</div>
-            <div id="contentScheduled" class="text-3xl font-bold text-blue-400">--</div>
-          </div>
-          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="text-gray-400 text-sm">Published</div>
-            <div id="contentPublished" class="text-3xl font-bold text-green-400">--</div>
-          </div>
-          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="text-gray-400 text-sm">Failed</div>
-            <div id="contentFailed" class="text-3xl font-bold text-red-400">--</div>
-          </div>
+      <!-- Pipeline Health Summary -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Pipeline Tasks</div>
+          <div id="plTotal" class="text-xl sm:text-3xl font-bold text-white">--</div>
         </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Running</div>
+          <div id="plRunning" class="text-xl sm:text-3xl font-bold text-blue-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Completed</div>
+          <div id="plCompleted" class="text-xl sm:text-3xl font-bold text-green-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Failed</div>
+          <div id="plFailed" class="text-xl sm:text-3xl font-bold text-red-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Success Rate</div>
+          <div id="plSuccessRate" class="text-xl sm:text-3xl font-bold text-emerald-400">--</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+
+        <!-- Queue Overview -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>📋</span> Queue Overview
+          </h3>
+          <div id="plQueueOverview" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading queue data...</div>
+          </div>
+        </section>
+
+        <!-- Generation Status -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>⚙️</span> Generation Status
+          </h3>
+          <div id="plGenerationStatus" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading generation status...</div>
+          </div>
+        </section>
 
         <!-- Review Queue -->
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
-          <h3 class="text-lg font-semibold mb-4 text-purple-400">⏳ Pending Review</h3>
-          <div id="contentReviewQueue" class="space-y-2">
-            <div class="text-gray-400">Loading...</div>
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>👁️</span> Review Queue
+          </h3>
+          <div id="plReviewQueue" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading review queue...</div>
           </div>
-        </div>
+        </section>
 
-        <!-- Recent Published -->
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
-          <h3 class="text-lg font-semibold mb-4 text-green-400">✅ Recently Published</h3>
-          <div id="contentRecentPublished" class="space-y-2">
-            <div class="text-gray-400">Loading...</div>
+        <!-- Published Content -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>📰</span> Published Content
+          </h3>
+          <div id="plPublished" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading published content...</div>
           </div>
-        </div>
+        </section>
 
-        <!-- Published Articles -->
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <h3 class="text-lg font-semibold mb-4 text-cyan-400">📰 Published Articles</h3>
-          <div id="contentPublishedArticles" class="space-y-2">
-            <div class="text-gray-400">Loading...</div>
-          </div>
-        </div>
+      </div>
 
-        <div class="mt-6 text-center">
-          <button onclick="loadContentPipeline()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-            🔄 Refresh Content Pipeline
-          </button>
+      <!-- Pipeline Health -->
+      <section class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <span>💚</span> Pipeline Health
+        </h3>
+        <div id="plHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="loading text-gray-400 text-sm">Loading health metrics...</div>
         </div>
       </section>
-    </div><!-- End Content Pipeline Tab -->
+
+      <!-- Recent Pipeline Activity -->
+      <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <span>📝</span> Recent Pipeline Tasks
+        </h3>
+        <div id="plRecentTasks" class="space-y-2">
+          <div class="loading text-gray-400 text-sm">Loading recent tasks...</div>
+        </div>
+      </section>
+
+      <!-- Refresh -->
+      <div class="mt-6 text-center">
+        <button onclick="loadPipeline()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+          🔄 Refresh Pipeline
+        </button>
+      </div>
+
+    </div><!-- End Pipeline Tab -->
+
+    <!-- ==================== ASCIIFLOW DIAGRAMS TAB ==================== -->
+    <div id="content-asciiflow" class="tab-content">
+      <div class="mb-4 flex justify-between items-center">
+        <h2 class="text-lg sm:text-xl font-semibold flex items-center">
+          <span class="mr-2">✏️</span> Diagrams — ASCIIFlow
+        </h2>
+        <div class="flex gap-2">
+          <button onclick="openAsciiflowFullscreen()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+            ⛶ Fullscreen
+          </button>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden" style="height: calc(100vh - 220px);">
+        <iframe id="asciiflow-iframe" src="asciiflow/index.html" style="width: 100%; height: 100%; border: none; background: white;"></iframe>
+      </div>
+    </div><!-- End ASCIIFlow Tab -->
 
   </main>
 
@@ -691,6 +714,13 @@
     </div>
   </footer>
 
+  <script>
+    function openAsciiflowFullscreen() {
+      const iframe = document.getElementById('asciiflow-iframe');
+      if (iframe.requestFullscreen) iframe.requestFullscreen();
+      else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+    }
+  </script>
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>
