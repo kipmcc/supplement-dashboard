@@ -63,6 +63,9 @@
         <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           🔄 Pipeline
         </button>
+        <button onclick="switchTab('asciiflow')" id="tab-asciiflow" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          ✏️ Diagrams
+        </button>
       </div>
     </div>
   </header>
@@ -92,6 +95,11 @@
       }
       if (tabName === 'pipeline' && window.loadPipeline) {
         window.loadPipeline();
+      }
+      if (tabName === 'asciiflow') {
+        // Resize iframe on tab switch
+        const iframe = document.getElementById('asciiflow-iframe');
+        if (iframe) iframe.style.height = (window.innerHeight - 220) + 'px';
       }
     }
   </script>
@@ -680,6 +688,23 @@
 
     </div><!-- End Pipeline Tab -->
 
+    <!-- ==================== ASCIIFLOW DIAGRAMS TAB ==================== -->
+    <div id="content-asciiflow" class="tab-content">
+      <div class="mb-4 flex justify-between items-center">
+        <h2 class="text-lg sm:text-xl font-semibold flex items-center">
+          <span class="mr-2">✏️</span> Diagrams — ASCIIFlow
+        </h2>
+        <div class="flex gap-2">
+          <button onclick="openAsciiflowFullscreen()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs">
+            ⛶ Fullscreen
+          </button>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden" style="height: calc(100vh - 220px);">
+        <iframe id="asciiflow-iframe" src="asciiflow/index.html" style="width: 100%; height: 100%; border: none; background: white;"></iframe>
+      </div>
+    </div><!-- End ASCIIFlow Tab -->
+
   </main>
 
   <!-- Footer -->
@@ -689,6 +714,13 @@
     </div>
   </footer>
 
+  <script>
+    function openAsciiflowFullscreen() {
+      const iframe = document.getElementById('asciiflow-iframe');
+      if (iframe.requestFullscreen) iframe.requestFullscreen();
+      else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+    }
+  </script>
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>
