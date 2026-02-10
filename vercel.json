@@ -6,23 +6,7 @@
       "use": "@vercel/node"
     },
     {
-      "src": "*.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.png",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.md",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "asciiflow/**",
+      "src": "**/*",
       "use": "@vercel/static"
     }
   ],
