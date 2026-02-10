@@ -1,20 +1,30 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "index.html", "use": "@vercel/static" },
-    { "src": "dashboard.js", "use": "@vercel/static" },
-    { "src": "aviado-logo.png", "use": "@vercel/static" },
-    { "src": "AI_README.md", "use": "@vercel/static" },
-    { "src": "ai-readme.html", "use": "@vercel/static" },
-    { "src": "asciiflow/index.html", "use": "@vercel/static" },
-    { "src": "asciiflow/asciiflow.bundle.js", "use": "@vercel/static" },
-    { "src": "asciiflow/supabase-bridge.js", "use": "@vercel/static" },
-    { "src": "asciiflow/how-to.html", "use": "@vercel/static" },
-    { "src": "asciiflow/favicon.png", "use": "@vercel/static" },
-    { "src": "asciiflow/logo_full.svg", "use": "@vercel/static" },
-    { "src": "asciiflow/logo_min.svg", "use": "@vercel/static" },
-    { "src": "asciiflow/github_mark.png", "use": "@vercel/static" }
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "*.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.png",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.md",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "asciiflow/*",
+      "use": "@vercel/static"
+    }
   ],
   "routes": [
     { "src": "/api/auth", "dest": "/api/auth.js" },
