@@ -54,7 +54,15 @@ async function apiDelete(id) {
 // ===================== Canvas API (via modified ASCIIFlow) =====================
 
 function loadToCanvas(text) {
-  if (window.__aviflow_api) { window.__aviflow_api.loadText(text); return true; }
+  if (window.__aviflow_api) {
+    window.__aviflow_api.loadText(text);
+    // Reset viewport to show content at origin
+    if (window.__aviflow_store && window.__aviflow_store.currentCanvas) {
+      window.__aviflow_store.currentCanvas.setOffset({x: 0, y: 0});
+      window.__aviflow_store.currentCanvas.setZoom(1);
+    }
+    return true;
+  }
   console.error('AviFlow API not available — ASCIIFlow bundle may not be modified');
   return false;
 }
