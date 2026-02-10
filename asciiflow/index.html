@@ -155,38 +155,20 @@
 
         hideNativeCaret();
 
-        // Save/restore canvas offset across toggles
-        let savedOffset = null;
-        let savedZoom = null;
-
         btn.addEventListener('click', () => {
-          const canvas = window.__aviflow_store?.currentCanvas;
-
-          // Save offset BEFORE toggling
-          if (canvas) {
-            savedOffset = { x: canvas.offset.x, y: canvas.offset.y };
-            savedZoom = canvas.zoom;
-          }
-
           const collapsed = document.body.classList.toggle('sidebar-collapsed');
           document.body.classList.toggle('sidebar-open', !collapsed);
           btn.textContent = collapsed ? '›' : '‹';
           btn.style.left = collapsed ? '0px' : sidebarW + 'px';
 
-          // Restore offset AFTER toggle (prevent ASCIIFlow from resetting it)
+          // Re-justify canvas for the new sidebar state
+          // Use slight delay to let CSS transition complete
           setTimeout(() => {
-            if (canvas && savedOffset) {
-              canvas.setOffset(savedOffset);
-              canvas.setZoom(savedZoom || 1);
-            }
+            if (window._af && window._af.topLeft) window._af.topLeft();
           }, 50);
-          // Also restore after resize triggers
           setTimeout(() => {
-            if (canvas && savedOffset) {
-              canvas.setOffset(savedOffset);
-              canvas.setZoom(savedZoom || 1);
-            }
-          }, 350);
+            if (window._af && window._af.topLeft) window._af.topLeft();
+          }, 300);
         });
       }
 
