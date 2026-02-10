@@ -532,6 +532,19 @@
         </p>
       </div>
 
+      <!-- Task Filter Tabs -->
+      <div class="flex gap-2 mb-4 border-b border-gray-700 pb-3">
+        <button onclick="filterTasks('open')" id="task-filter-open" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-blue-600 text-white border-b-2 border-blue-400">
+          📋 Open Tasks
+        </button>
+        <button onclick="filterTasks('completed')" id="task-filter-completed" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
+          ✅ Completed
+        </button>
+        <button onclick="filterTasks('all')" id="task-filter-all" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
+          📑 All
+        </button>
+      </div>
+
       <!-- Dynamic Task Queue -->
       <div id="taskQueueContainer" class="space-y-4">
         <div class="text-gray-400 loading">Loading task queue...</div>

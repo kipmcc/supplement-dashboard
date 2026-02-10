@@ -4,6 +4,8 @@
     
     let supabase;
     let aviScoreChart;
+    let currentTaskFilter = 'open'; // 'open', 'completed', or 'all'
+    let allTasks = []; // Cache for task filtering
 
     // Initialize
     async function init() {
@@ -686,11 +688,44 @@
         
         if (error) throw error;
         
-        renderTaskQueue(tasks);
-        updateTaskSummary(tasks);
+        allTasks = tasks || [];
+        renderTaskQueue(filterTasksByStatus(allTasks, currentTaskFilter));
+        updateTaskSummary(allTasks);
         
       } catch (error) {
         console.error('Error loading task queue:', error);
+      }
+    }
+    
+    // Filter tasks based on status
+    function filterTasksByStatus(tasks, filter) {
+      if (filter === 'open') {
+        return tasks.filter(t => !['complete', 'completed', 'rejected'].includes(t.status));
+      } else if (filter === 'completed') {
+        return tasks.filter(t => ['complete', 'completed'].includes(t.status));
+      }
+      return tasks; // 'all'
+    }
+    
+    // Switch task filter tab
+    function filterTasks(filter) {
+      currentTaskFilter = filter;
+      
+      // Update tab button styles
+      ['open', 'completed', 'all'].forEach(f => {
+        const btn = document.getElementById('task-filter-' + f);
+        if (btn) {
+          if (f === filter) {
+            btn.className = 'px-4 py-2 rounded-t-lg text-sm font-medium bg-blue-600 text-white border-b-2 border-blue-400';
+          } else {
+            btn.className = 'px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300';
+          }
+        }
+      });
+      
+      // Re-render with filter
+      if (allTasks.length > 0) {
+        renderTaskQueue(filterTasksByStatus(allTasks, filter));
       }
     }
     
@@ -1188,6 +1223,7 @@
     window.rejectTask = rejectTask;
     window.loadTaskQueue = loadTaskQueue;
     window.loadProjects = loadProjects;
+    window.filterTasks = filterTasks;
     
     // Expose for button and debugging
     window.refreshAll = refreshAll;
