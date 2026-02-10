@@ -123,11 +123,15 @@ function getCurrentDrawingName() {
 }
 
 function setCanvasContent(asciiText) {
-  const prefix = getStorageKeyPrefix();
-  const layerJson = asciiToLayerFormat(asciiText);
-  localStorage.setItem(prefix + 'committed-layer', layerJson);
-  localStorage.setItem(prefix + 'undo-layers', '[]');
-  localStorage.setItem(prefix + 'redo-layers', '[]');
+  // Use ASCIIFlow's share URL format — this is the most reliable way to load content
+  // DrawingStringifier: base64(pako.deflate(JSON({name, layer: Layer.serialize()})))
+  const layerJson = JSON.stringify({ version: 2, x: 0, y: 0, text: asciiText });
+  const drawingJson = JSON.stringify({ name: 'cloud', layer: layerJson });
+  const jsonBytes = new TextEncoder().encode(drawingJson);
+  const deflated = pako.deflate(jsonBytes);
+  const shareSpec = Base64.fromUint8Array(deflated);
+  // Navigate to the share URL — ASCIIFlow handles the rest
+  window.location.href = window.location.pathname + '#/share/' + encodeURIComponent(shareSpec);
 }
 
 // ===================== State =====================
@@ -418,11 +422,14 @@ async function handleLoad(id) {
   currentDiagramId = diagram.id;
   currentDiagramTitle = diagram.title;
   lastSavedContent = diagram.content;
-  document.getElementById('af-title').value = diagram.title;
-  document.getElementById('af-project').value = diagram.project_key || '';
+  const titleEl = document.getElementById('af-title');
+  const projEl = document.getElementById('af-project');
+  if (titleEl) titleEl.value = diagram.title;
+  if (projEl) projEl.value = diagram.project_key || '';
   setCanvasContent(diagram.content);
-  showMsg(`Loaded "${diagram.title}" — reloading...`, 'ok');
-  setTimeout(() => window.location.reload(), 300);
+  // Reload after a moment to let hash change take effect and re-init
+  showMsg(`Loading "${diagram.title}"...`, 'ok');
+  setTimeout(() => window.location.reload(), 200);
 }
 
 async function handleSave() {
