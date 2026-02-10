@@ -2,5 +2,6 @@ node_modules/
 .env.local
 .vercel/
 *.log
-asciiflow-src/
+asciiflow-src/node_modules/
+asciiflow-src/dist/
 .vercel
