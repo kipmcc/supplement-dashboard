@@ -199,9 +199,23 @@ function checkPendingLoad() {
               if (db.textContent.trim() === 'FORK') {
                 db.click();
                 sessionStorage.removeItem(PENDING_META_KEY);
+                // After fork, set viewport offset to near origin so content is visible
+                setTimeout(() => {
+                  const keys = Object.keys(localStorage).filter(k => k.includes('offset'));
+                  // Set all drawing offsets to near origin
+                  for (const key of keys) {
+                    localStorage.setItem(key, JSON.stringify({x: -100, y: -50}));
+                  }
+                  // Also find any new drawing's offset key and set it
+                  const drawingKeys = Object.keys(localStorage).filter(k => k.includes('committed-layer'));
+                  for (const dk of drawingKeys) {
+                    const offsetKey = dk.replace('committed-layer', 'offset');
+                    localStorage.setItem(offsetKey, JSON.stringify({x: -100, y: -50}));
+                    localStorage.setItem(dk.replace('committed-layer', 'zoom'), '1');
+                  }
+                  window.location.reload();
+                }, 500);
                 showMsg(`Loaded "${meta.title}"`, 'ok');
-                // Update the list after fork
-                setTimeout(() => refreshCloudList(), 500);
                 return;
               }
             }
