@@ -81,13 +81,9 @@
         document.getElementById('totalSources').textContent = sourceCount?.toLocaleString() || '0';
         document.getElementById('totalSources').classList.remove('loading');
 
-        // Unique brands
-        const { data: brands } = await supabase
-          .from('canonical_products')
-          .select('brand')
-          .not('brand', 'is', null);
-        const uniqueBrands = new Set(brands?.map(b => b.brand)).size;
-        document.getElementById('totalBrands').textContent = uniqueBrands.toLocaleString();
+        // Unique brands (use RPC to avoid row limit issue)
+        const { data: brandCount } = await supabase.rpc('get_unique_brand_count');
+        document.getElementById('totalBrands').textContent = (brandCount || 0).toLocaleString();
         document.getElementById('totalBrands').classList.remove('loading');
 
         // Discovered products
@@ -156,27 +152,10 @@
     // Load AviScore Chart
     async function loadAviScoreChart(total) {
       try {
-        const { data, count } = await supabase
-          .from('canonical_products')
-          .select('routing_metadata', { count: 'exact' })
-          .not('routing_metadata->avi_score', 'is', null)
-          .limit(10000);
-
-        const grades = { A: 0, B: 0, C: 0, D: 0, F: 0, 'No Score': 0 };
+        // Use server-side aggregation to avoid row limit issues
+        const { data: distribution } = await supabase.rpc('get_aviscore_distribution');
         
-        data?.forEach(p => {
-          const score = p.routing_metadata?.avi_score?.score;
-          if (score === undefined || score === null) {
-            grades['No Score']++;
-          } else if (score >= 8) grades.A++;
-          else if (score >= 6) grades.B++;
-          else if (score >= 4) grades.C++;
-          else if (score >= 2) grades.D++;
-          else grades.F++;
-        });
-
-        const noScoreCount = total - count;
-        grades['No Score'] = noScoreCount;
+        const grades = distribution || { A: 0, B: 0, C: 0, D: 0, F: 0, 'No Score': 0 };
 
         const ctx = document.getElementById('aviScoreCanvas').getContext('2d');
         
@@ -424,6 +403,7 @@
       { key: 'missing_upc', label: 'Missing UPC', color: '#ef4444' },
       { key: 'missing_facts', label: 'Missing Supplement Facts', color: '#f97316' },
       { key: 'missing_front_label', label: 'Missing Front Label', color: '#eab308' },
+      { key: 'missing_back_label', label: 'Missing Back Label', color: '#a855f7' },
       { key: 'missing_aviscore', label: 'Missing AviScore', color: '#3b82f6' },
       { key: 'unmatched_discovered', label: 'Unmatched Products', color: '#8b5cf6' }
     ];
@@ -491,6 +471,11 @@
         .select('*', { count: 'exact', head: true })
         .is('front_label_url', null);
 
+      const { count: noBack } = await supabase
+        .from('canonical_products')
+        .select('*', { count: 'exact', head: true })
+        .is('back_label_url', null);
+
       const { count: noScore } = await supabase
         .from('canonical_products')
         .select('*', { count: 'exact', head: true })
@@ -505,6 +490,7 @@
         missing_upc: noUpc || 0,
         missing_facts: noFacts || 0,
         missing_front_label: noFront || 0,
+        missing_back_label: noBack || 0,
         missing_aviscore: noScore || 0,
         unmatched_discovered: unmatched || 0
       };
@@ -512,11 +498,25 @@
 
     // Load historical metrics
     async function loadMetricsHistory() {
-      const { data } = await supabase
-        .from('metrics_history')
-        .select('captured_at, metric_name, metric_value')
-        .order('captured_at', { ascending: true })
-        .limit(500);
+      // Paginate to avoid Supabase row limits (default 1000)
+      let allData = [];
+      let offset = 0;
+      const batchSize = 1000;
+      
+      while (true) {
+        const { data } = await supabase
+          .from('metrics_history')
+          .select('captured_at, metric_name, metric_value')
+          .order('captured_at', { ascending: true })
+          .range(offset, offset + batchSize - 1);
+        
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < batchSize) break;
+        offset += batchSize;
+      }
+      
+      const data = allData;
 
       // Group by date
       const byDate = {};
@@ -612,7 +612,7 @@
 
         // Show current values below chart
         let currentHtml = `
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 pt-4 border-t border-gray-700">
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mt-4 pt-4 border-t border-gray-700">
             ${DATA_GAP_METRICS.map(m => `
               <div class="text-center">
                 <div class="text-xs text-gray-400">${m.label}</div>
@@ -626,8 +626,12 @@
         // Enrichment queue (keep simple list)
         document.getElementById('enrichmentQueue').innerHTML = `
           <div class="flex justify-between items-center p-2 bg-gray-700/50 rounded">
-            <span class="text-sm">Products needing OCR validation</span>
+            <span class="text-sm">Products missing front label</span>
             <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs font-bold">${currentMetrics.missing_front_label?.toLocaleString() || 0}</span>
+          </div>
+          <div class="flex justify-between items-center p-2 bg-gray-700/50 rounded">
+            <span class="text-sm">Products missing back label</span>
+            <span class="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs font-bold">${currentMetrics.missing_back_label?.toLocaleString() || 0}</span>
           </div>
           <div class="flex justify-between items-center p-2 bg-gray-700/50 rounded">
             <span class="text-sm">Products needing AviScore</span>
@@ -864,66 +868,144 @@
     
     async function loadProjects() {
       try {
-        const { data: projects, error } = await supabase
-          .from('projects')
+        // Load projects from task_queue where is_project=true
+        const { data: projects, error: projError } = await supabase
+          .from('task_queue')
           .select('*')
+          .eq('is_project', true)
           .order('priority', { ascending: true });
         
-        if (error) throw error;
+        if (projError) throw projError;
+        
+        // Load all subtasks
+        const { data: allTasks, error: taskError } = await supabase
+          .from('task_queue')
+          .select('*')
+          .eq('is_project', false)
+          .not('project_key', 'is', null)
+          .order('priority', { ascending: true });
+        
+        if (taskError) throw taskError;
+        
+        // Group subtasks by project_key
+        const subtasksByProject = {};
+        allTasks.forEach(task => {
+          if (!subtasksByProject[task.project_key]) subtasksByProject[task.project_key] = [];
+          subtasksByProject[task.project_key].push(task);
+        });
         
         // Update summary counts
         document.getElementById('projectTotal').textContent = projects.length;
         document.getElementById('projectCritical').textContent = 
-          projects.filter(p => p.priority === 'critical').length;
+          projects.filter(p => p.priority === 1).length;
         document.getElementById('projectHigh').textContent = 
-          projects.filter(p => p.priority === 'high').length;
+          projects.filter(p => p.priority === 2).length;
         document.getElementById('projectActive').textContent = 
-          projects.filter(p => !['done', 'archived'].includes(p.status)).length;
+          projects.filter(p => !['complete', 'completed', 'archived'].includes(p.status)).length;
         
         // Status colors and icons
         const statusColors = {
           planning: 'blue',
           research: 'purple', 
-          building: 'yellow',
-          testing: 'orange',
-          done: 'green',
+          pending: 'yellow',
+          running: 'green',
+          complete: 'emerald',
+          completed: 'emerald',
           archived: 'gray'
         };
         
         const priorityBadges = {
-          critical: { color: 'red', label: '🔴 Critical' },
-          high: { color: 'orange', label: '🟠 High' },
-          medium: { color: 'yellow', label: '🟡 Medium' },
-          low: { color: 'gray', label: '⚪ Low' }
+          1: { color: 'red', label: '🔴 P1' },
+          2: { color: 'orange', label: '🟠 P2' },
+          3: { color: 'yellow', label: '🟡 P3' },
+          4: { color: 'blue', label: '🔵 P4' },
+          5: { color: 'gray', label: '⚪ P5' },
+          6: { color: 'gray', label: '⚪ P6' }
         };
         
-        // Render project cards
+        const owners = {
+          jeff: { title: '🤖 Jeff (AI Agent)', color: 'cyan' },
+          maureen: { title: '👩‍💻 Maureen (Research)', color: 'pink' }
+        };
+        
+        // Group projects by owner
+        const byOwner = {};
+        projects.forEach(p => {
+          const owner = p.owner || 'jeff';
+          if (!byOwner[owner]) byOwner[owner] = [];
+          byOwner[owner].push(p);
+        });
+        
+        // Render project cards grouped by owner
         const grid = document.getElementById('projectsGrid');
-        grid.innerHTML = projects.map(project => {
-          const statusColor = statusColors[project.status] || 'gray';
-          const priority = priorityBadges[project.priority] || priorityBadges.medium;
-          const localPath = project.local_path || `projects/${project.name.toLowerCase().replace(/\s+/g, '-')}/`;
+        let html = '';
+        
+        for (const [ownerKey, ownerInfo] of Object.entries(owners)) {
+          const ownerProjects = byOwner[ownerKey] || [];
           
-          return `
-            <div class="bg-gray-900 rounded-lg p-4 border border-gray-700 hover:border-gray-500 transition-colors">
-              <div class="flex items-start justify-between mb-2">
-                <h4 class="font-semibold text-white">${project.name}</h4>
-                <span class="text-xs px-2 py-1 rounded-full bg-${priority.color}-900/50 text-${priority.color}-400 border border-${priority.color}-700">
-                  ${priority.label}
-                </span>
-              </div>
-              <div class="flex items-center gap-2 mb-3">
-                <span class="inline-block w-2 h-2 rounded-full bg-${statusColor}-500"></span>
-                <span class="text-sm text-${statusColor}-400 capitalize">${project.status}</span>
-              </div>
-              ${project.description ? `<p class="text-sm text-gray-400 mb-3">${project.description}</p>` : ''}
-              <div class="text-xs text-gray-500 flex items-center gap-1">
-                <span>📂</span>
-                <code class="bg-gray-800 px-1 rounded">${localPath}</code>
-              </div>
+          html += `
+            <div class="col-span-full mb-4">
+              <h3 class="text-lg font-bold text-${ownerInfo.color}-400 border-b border-${ownerInfo.color}-500/30 pb-2 mb-4">
+                ${ownerInfo.title}
+                <span class="text-sm font-normal text-gray-500 ml-2">(${ownerProjects.length} projects)</span>
+              </h3>
             </div>
           `;
-        }).join('');
+          
+          if (ownerProjects.length === 0) {
+            html += `<div class="col-span-full text-gray-500 mb-6">No projects assigned</div>`;
+            continue;
+          }
+          
+          for (const project of ownerProjects) {
+            const statusColor = statusColors[project.status] || 'gray';
+            const priority = priorityBadges[project.priority] || priorityBadges[5];
+            const localPath = `projects/${project.project_key}/`;
+            const subtasks = subtasksByProject[project.project_key] || [];
+            const completedSubtasks = subtasks.filter(t => t.status === 'complete' || t.status === 'completed').length;
+            
+            html += `
+              <div class="bg-gray-900 rounded-lg p-4 border border-gray-700 hover:border-${ownerInfo.color}-500/50 transition-colors">
+                <div class="flex items-start justify-between mb-2">
+                  <h4 class="font-semibold text-white">📁 ${project.title}</h4>
+                  <span class="text-xs px-2 py-1 rounded-full bg-${priority.color}-900/50 text-${priority.color}-400 border border-${priority.color}-700">
+                    ${priority.label}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="inline-block w-2 h-2 rounded-full bg-${statusColor}-500"></span>
+                  <span class="text-sm text-${statusColor}-400 capitalize">${project.status}</span>
+                  ${subtasks.length > 0 ? `<span class="text-xs text-gray-500 ml-2">• ${completedSubtasks}/${subtasks.length} tasks</span>` : ''}
+                </div>
+                ${project.description ? `<p class="text-sm text-gray-400 mb-3">${project.description}</p>` : ''}
+                
+                ${subtasks.length > 0 ? `
+                  <div class="mt-3 pt-3 border-t border-gray-700">
+                    <div class="text-xs text-gray-500 mb-2">Subtasks:</div>
+                    <div class="space-y-1">
+                      ${subtasks.slice(0, 5).map(t => `
+                        <div class="text-xs flex items-center gap-2">
+                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-emerald-400' : t.status === 'running' ? 'text-blue-400' : 'text-gray-500'}">
+                            ${t.status === 'complete' || t.status === 'completed' ? '✓' : t.status === 'running' ? '🔄' : '○'}
+                          </span>
+                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-400'}">${t.title}</span>
+                        </div>
+                      `).join('')}
+                      ${subtasks.length > 5 ? `<div class="text-xs text-gray-600">+${subtasks.length - 5} more...</div>` : ''}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                <div class="text-xs text-gray-500 flex items-center gap-1 mt-3">
+                  <span>📂</span>
+                  <code class="bg-gray-800 px-1 rounded">${localPath}</code>
+                </div>
+              </div>
+            `;
+          }
+        }
+        
+        grid.innerHTML = html || '<div class="text-gray-400 col-span-full">No projects found</div>';
         
       } catch (error) {
         console.error('Error loading projects:', error);
@@ -931,6 +1013,175 @@
           `<div class="text-red-400 col-span-full text-center py-8">Error loading projects: ${error.message}</div>`;
       }
     }
+    
+    // ==================== MOBILE MVP TAB ====================
+    
+    let currentMVPFilter = 'all';
+    let mvpItems = [];
+    
+    async function loadMobileMVP() {
+      try {
+        const { data, error } = await supabase
+          .from('mobile_mvp_items')
+          .select('*')
+          .order('priority')
+          .order('category')
+          .order('title');
+        
+        if (error) throw error;
+        mvpItems = data || [];
+        renderMVPItems();
+      } catch (error) {
+        console.error('Error loading MVP items:', error);
+        document.getElementById('mvp-items').innerHTML = 
+          `<div class="text-red-400 text-center py-8">Error loading MVP items: ${error.message}</div>`;
+      }
+    }
+    
+    function renderMVPItems() {
+      const filtered = currentMVPFilter === 'all' 
+        ? mvpItems 
+        : mvpItems.filter(item => item.priority === currentMVPFilter);
+      
+      // Calculate progress
+      const total = filtered.length;
+      const complete = filtered.filter(i => i.status === 'complete').length;
+      const percent = total > 0 ? Math.round((complete / total) * 100) : 0;
+      
+      document.getElementById('mvp-progress').textContent = `${complete}/${total} complete`;
+      document.getElementById('mvp-percent').textContent = `${percent}%`;
+      document.getElementById('mvp-bar').style.width = `${percent}%`;
+      document.getElementById('mvp-complete').textContent = `${complete} complete`;
+      document.getElementById('mvp-total').textContent = `${total} total`;
+      
+      // Group by category
+      const byCategory = {};
+      filtered.forEach(item => {
+        if (!byCategory[item.category]) byCategory[item.category] = [];
+        byCategory[item.category].push(item);
+      });
+      
+      const priorityColors = {
+        'P0': { bg: 'red', label: '🔴 Critical' },
+        'P1': { bg: 'yellow', label: '🟡 High' },
+        'P2': { bg: 'green', label: '🟢 Nice-to-Have' }
+      };
+      
+      const statusIcons = {
+        'complete': '✅',
+        'in_progress': '🔄',
+        'blocked': '🚫',
+        'not_started': '⬜'
+      };
+      
+      let html = '';
+      
+      for (const [category, items] of Object.entries(byCategory)) {
+        const categoryComplete = items.filter(i => i.status === 'complete').length;
+        const categoryPercent = Math.round((categoryComplete / items.length) * 100);
+        
+        html += `
+          <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="font-semibold text-white">${category}</h3>
+              <span class="text-sm text-gray-400">${categoryComplete}/${items.length} (${categoryPercent}%)</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-1.5 mb-4">
+              <div class="bg-green-500 h-1.5 rounded-full" style="width: ${categoryPercent}%"></div>
+            </div>
+            <div class="space-y-2">
+        `;
+        
+        for (const item of items) {
+          const priority = priorityColors[item.priority] || priorityColors['P1'];
+          const statusIcon = statusIcons[item.status] || '⬜';
+          const isComplete = item.status === 'complete';
+          
+          html += `
+            <div class="flex items-start gap-3 p-2 rounded hover:bg-gray-700/50 ${isComplete ? 'opacity-60' : ''}">
+              <button onclick="toggleMVPStatus('${item.id}', '${item.status}')" 
+                      class="text-lg flex-shrink-0 hover:scale-110 transition-transform"
+                      title="Click to toggle status">
+                ${statusIcon}
+              </button>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="${isComplete ? 'line-through text-gray-500' : 'text-white'}">${item.title}</span>
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-${priority.bg}-900/50 text-${priority.bg}-400">${item.priority}</span>
+                  ${item.screen_name ? `<span class="text-xs text-gray-500">📱 ${item.screen_name}</span>` : ''}
+                </div>
+                ${item.description ? `<p class="text-xs text-gray-500 mt-1">${item.description}</p>` : ''}
+              </div>
+            </div>
+          `;
+        }
+        
+        html += `
+            </div>
+          </div>
+        `;
+      }
+      
+      document.getElementById('mvp-items').innerHTML = html || '<div class="text-gray-400 text-center py-8">No items found</div>';
+    }
+    
+    async function toggleMVPStatus(id, currentStatus) {
+      const newStatus = currentStatus === 'complete' ? 'not_started' : 
+                        currentStatus === 'not_started' ? 'in_progress' :
+                        currentStatus === 'in_progress' ? 'complete' : 'not_started';
+      
+      try {
+        const updates = { 
+          status: newStatus, 
+          updated_at: new Date().toISOString()
+        };
+        if (newStatus === 'complete') {
+          updates.completed_at = new Date().toISOString();
+        } else {
+          updates.completed_at = null;
+        }
+        
+        const { error } = await supabase
+          .from('mobile_mvp_items')
+          .update(updates)
+          .eq('id', id);
+        
+        if (error) throw error;
+        
+        // Update local state and re-render
+        const item = mvpItems.find(i => i.id === id);
+        if (item) {
+          item.status = newStatus;
+          item.completed_at = updates.completed_at;
+        }
+        renderMVPItems();
+      } catch (error) {
+        console.error('Error updating MVP item:', error);
+        alert('Failed to update status: ' + error.message);
+      }
+    }
+    
+    function filterMVP(priority) {
+      currentMVPFilter = priority;
+      
+      // Update filter buttons
+      document.querySelectorAll('.mvp-filter').forEach(btn => {
+        if (btn.dataset.filter === priority) {
+          btn.classList.remove('bg-gray-700');
+          btn.classList.add('bg-blue-600');
+        } else {
+          btn.classList.remove('bg-blue-600');
+          btn.classList.add('bg-gray-700');
+        }
+      });
+      
+      renderMVPItems();
+    }
+    
+    // Expose MVP functions globally
+    window.loadMobileMVP = loadMobileMVP;
+    window.toggleMVPStatus = toggleMVPStatus;
+    window.filterMVP = filterMVP;
     
     // Expose task functions globally
     window.approveTask = approveTask;

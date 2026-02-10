@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aviado Supplement Database Dashboard</title>
+  <!-- Auth check - redirect to login if not authenticated -->
+  <script>
+    (async function() {
+      try {
+        const res = await fetch('/api/verify');
+        if (!res.ok) {
+          window.location.href = '/login.html';
+        }
+      } catch (e) {
+        window.location.href = '/login.html';
+      }
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -60,6 +73,9 @@
         <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           ✅ Tasks
         </button>
+        <button onclick="switchTab('mobile')" id="tab-mobile" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          📱 Mobile MVP
+        </button>
       </div>
     </div>
   </header>
@@ -86,6 +102,9 @@
       }
       if (tabName === 'projects' && window.loadProjects) {
         window.loadProjects();
+      }
+      if (tabName === 'mobile' && window.loadMobileMVP) {
+        window.loadMobileMVP();
       }
     }
   </script>
@@ -124,7 +143,20 @@
       </div>
     </section>
 
-    <!-- Section 2: Data Coverage -->
+    <!-- Section 2: Data Gap Trends (Priority View) -->
+    <section class="mb-6 sm:mb-8">
+      <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
+        <span class="mr-2">📉</span> Data Gap Trends
+      </h2>
+      <div class="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+        <div id="dataGapsChart" class="h-48 sm:h-64">
+          <canvas id="dataGapsCanvas"></canvas>
+        </div>
+        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
+      </div>
+    </section>
+
+    <!-- Section 3: Data Coverage -->
     <section class="mb-6 sm:mb-8">
       <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
         <span class="mr-2">📈</span> Data Coverage
@@ -170,20 +202,7 @@
       </div>
     </section>
 
-    <!-- Section 6: Data Gap Trends -->
-    <section class="mb-8">
-      <h2 class="text-xl font-semibold mb-4 flex items-center">
-        <span class="mr-2">📉</span> Data Gap Trends
-      </h2>
-      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <div id="dataGapsChart" class="h-64">
-          <canvas id="dataGapsCanvas"></canvas>
-        </div>
-        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
-      </div>
-    </section>
-
-    <!-- Section 6b: Enrichment Queue -->
+    <!-- Section: Enrichment Queue -->
     <section class="mb-8">
       <h2 class="text-xl font-semibold mb-4 flex items-center">
         <span class="mr-2">🎯</span> Enrichment Queue
@@ -345,53 +364,6 @@
               <div class="flex justify-between"><span class="text-gray-300">Telehealth Clinics</span><span class="text-blue-400">5</span></div>
               <div class="flex justify-between"><span class="text-gray-300">Research Vendors</span><span class="text-yellow-400">9</span></div>
               <div class="flex justify-between"><span class="text-gray-300">International</span><span class="text-purple-400">3</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Section 10: Category Gaps -->
-    <section class="mb-8">
-      <h2 class="text-xl font-semibold mb-4 flex items-center">
-        <span class="mr-2">📊</span> Category Coverage Gaps
-      </h2>
-      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <div id="categoryGaps" class="space-y-3">
-          <div>
-            <div class="flex justify-between text-sm mb-1">
-              <span>Omega-3 Fish Oils</span>
-              <span class="text-red-400">79 / 500 (16%)</span>
-            </div>
-            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-red-500 to-red-600" style="width: 16%"></div>
-            </div>
-          </div>
-          <div>
-            <div class="flex justify-between text-sm mb-1">
-              <span>Probiotics</span>
-              <span class="text-yellow-400">184 / 400 (46%)</span>
-            </div>
-            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-yellow-500 to-yellow-600" style="width: 46%"></div>
-            </div>
-          </div>
-          <div>
-            <div class="flex justify-between text-sm mb-1">
-              <span>Senior/50+ Formulas</span>
-              <span class="text-red-400">20 / 200 (10%)</span>
-            </div>
-            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-red-500 to-red-600" style="width: 10%"></div>
-            </div>
-          </div>
-          <div>
-            <div class="flex justify-between text-sm mb-1">
-              <span>Prenatal Vitamins</span>
-              <span class="text-yellow-400">142 / 200 (71%)</span>
-            </div>
-            <div class="h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-gradient-to-r from-yellow-500 to-green-500" style="width: 71%"></div>
             </div>
           </div>
         </div>
@@ -573,6 +545,51 @@
       </div>
 
     </div><!-- End Tasks Tab -->
+
+    <!-- ==================== MOBILE MVP TAB ==================== -->
+    <div id="content-mobile" class="tab-content">
+      <section>
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-semibold flex items-center">
+            <span class="mr-2">📱</span> Mobile MVP Checklist
+          </h2>
+          <div class="flex gap-2">
+            <span id="mvp-progress" class="text-sm text-gray-400">Loading...</span>
+            <button onclick="loadMobileMVP()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+              🔄 Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mb-6 bg-gray-800 rounded-lg p-4">
+          <div class="flex justify-between text-sm mb-2">
+            <span>Overall Progress</span>
+            <span id="mvp-percent">0%</span>
+          </div>
+          <div class="w-full bg-gray-700 rounded-full h-3">
+            <div id="mvp-bar" class="bg-green-500 h-3 rounded-full progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-xs text-gray-400 mt-2">
+            <span id="mvp-complete">0 complete</span>
+            <span id="mvp-total">0 total</span>
+          </div>
+        </div>
+
+        <!-- Filter by Priority -->
+        <div class="mb-4 flex gap-2 flex-wrap">
+          <button onclick="filterMVP('all')" class="mvp-filter active px-3 py-1 bg-blue-600 rounded text-sm" data-filter="all">All</button>
+          <button onclick="filterMVP('P0')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P0">🔴 P0 Critical</button>
+          <button onclick="filterMVP('P1')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P1">🟡 P1 High</button>
+          <button onclick="filterMVP('P2')" class="mvp-filter px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm" data-filter="P2">🟢 P2 Nice-to-Have</button>
+        </div>
+
+        <!-- MVP Items by Category -->
+        <div id="mvp-items" class="space-y-6">
+          <div class="text-gray-400 text-center py-8">Loading MVP items...</div>
+        </div>
+      </section>
+    </div><!-- End Mobile MVP Tab -->
 
   </main>
 
