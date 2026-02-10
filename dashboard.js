@@ -1002,6 +1002,11 @@
                   </button>
                 ` : ''}
                 ${isRunning ? `<span class="px-3 py-1 bg-blue-600/50 rounded text-xs animate-pulse">Running...</span>` : ''}
+                ${!isComplete && !isActionable ? `
+                  <button onclick="completeTask('${task.task_key}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-xs font-medium">
+                    ✓ Mark Complete
+                  </button>
+                ` : ''}
                 ${isComplete ? `<span class="px-3 py-1 bg-emerald-600/30 rounded text-xs text-emerald-400">Done</span>` : ''}
               </div>
             </div>
@@ -1043,6 +1048,33 @@
     async function rejectTask(taskKey) {
       await updateTaskStatus(taskKey, 'rejected');
     }
+    
+    // Mark task complete (for human tasks or manual completion)
+    async function completeTask(taskKey) {
+      const summary = prompt('Result summary (optional):');
+      try {
+        const updates = {
+          status: 'complete',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        if (summary) updates.result_summary = summary;
+        
+        const { error } = await supabase
+          .from('task_queue')
+          .update(updates)
+          .eq('task_key', taskKey);
+        
+        if (error) throw error;
+        await loadTaskQueue();
+      } catch (error) {
+        console.error('Error completing task:', error);
+        alert('Failed to complete task: ' + error.message);
+      }
+    }
+    
+    // Expose to window
+    window.completeTask = completeTask;
     
     // ==================== PROJECTS ====================
     
