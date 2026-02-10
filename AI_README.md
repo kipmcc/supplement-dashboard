@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 06:24 CST by Jeff*
+*Last updated: 2026-02-10 06:30 CST by Jeff*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -33,6 +33,114 @@ The Tasks tab has four filter views:
 | **✅ Completed** | complete, completed | Finished tasks |
 | **🔄 Ongoing** | Background processes (Image Hunter, etc.) | Pause/resume long-running jobs |
 | **📑 All** | Everything | Full view |
+
+---
+
+## 📁 Projects Tab — High-Level Work Tracking
+
+### What is a "Project"?
+A **project** is a significant body of work that spans multiple tasks and days/weeks. Projects are tracked at a higher level than individual tasks.
+
+**Examples:**
+- Mobile App development
+- AviScore v2 research
+- Brand Gaps scraping initiative
+- Drug-Supplement Interactions database
+
+**NOT projects (these are tasks):**
+- "Scrape Heart & Soil products"
+- "Fix image verification bug"
+- "Add Mark Complete button"
+
+### Project Tracking: Two Systems
+
+**1. Supabase `projects` table** — Dashboard display
+| Column | Purpose |
+|--------|---------|
+| `slug` | Unique identifier (e.g., "mobile-app") |
+| `name` | Display name |
+| `status` | planning, research, active, paused, complete |
+| `priority` | critical, high, medium, low |
+| `local_path` | Path to local project folder |
+| `owner` | jeff, maureen, kip |
+| `target_date` | When we aim to complete |
+
+**2. Local `projects/` directory** — Detailed working notes
+```
+/Users/aviado1/clawd/projects/
+├── _archive/              # Completed projects
+├── mobile-app/
+│   └── STATUS.md          # Current state, goals, blockers
+├── aviscore-v2/
+│   └── STATUS.md
+├── brand-gaps/
+│   └── STATUS.md
+├── supplement-database/
+│   ├── STATUS.md
+│   └── research/          # Sub-agent findings, analysis
+├── longevity-daily/
+│   ├── STATUS.md
+│   └── NEWSLETTER_EVOLUTION_RESEARCH.md
+└── [other-projects]/
+```
+
+### STATUS.md — The Sacred File
+
+Every project folder MUST have a `STATUS.md` with:
+
+```markdown
+# [Project Name] - Status
+
+**Last Updated:** YYYY-MM-DD HH:MM CST
+
+## Current State
+🔄 Active | ⏸️ Paused | ✅ Complete | 📋 Planning
+
+## Recent Progress
+- What just happened
+
+## Next Steps
+- What's pending
+
+## Blockers
+- What's in the way
+
+## Key Files
+- Important paths/scripts
+```
+
+**Update STATUS.md after every meaningful work session.** This saves you when context gets compacted.
+
+### Project Lifecycle
+```
+planning → research → active → complete → _archive/
+              ↓
+           paused
+```
+
+### Creating a New Project
+
+1. **Add to Supabase:**
+```sql
+INSERT INTO projects (slug, name, status, priority, local_path, owner)
+VALUES ('my-project', 'My New Project', 'planning', 'medium', 'projects/my-project', 'jeff');
+```
+
+2. **Create local folder:**
+```bash
+mkdir -p /Users/aviado1/clawd/projects/my-project
+```
+
+3. **Create STATUS.md:**
+```bash
+echo "# My Project - Status\n\n**Last Updated:** $(date)\n\n## Current State\n📋 Planning" > projects/my-project/STATUS.md
+```
+
+### Archiving Completed Projects
+```bash
+mv projects/my-project projects/_archive/
+```
+Update Supabase status to `complete`.
 
 ---
 
