@@ -317,15 +317,21 @@ function createSidebarSection(sidebar) {
     </div>
   `;
 
-  // Try to insert after File section, before Edit
+  // Insert inside the MUI list, between File entries and Edit
   let inserted = false;
-  const children = Array.from(sidebar.children);
-  for (let i = 0; i < children.length; i++) {
-    const text = (children[i].textContent || '').trim();
-    if (text.startsWith('Edit') || text === 'Edit') {
-      sidebar.insertBefore(section, children[i]);
-      inserted = true;
-      break;
+  const muiList = sidebar.querySelector('ul.MuiList-root, ul[class*="MuiList"]');
+  if (muiList) {
+    const listItems = Array.from(muiList.children);
+    for (let i = 0; i < listItems.length; i++) {
+      if (listItems[i].textContent.trim().startsWith('Edit')) {
+        // Wrap in LI for valid HTML
+        const li = document.createElement('li');
+        li.style.listStyle = 'none';
+        li.appendChild(section);
+        muiList.insertBefore(li, listItems[i]);
+        inserted = true;
+        break;
+      }
     }
   }
   if (!inserted) sidebar.appendChild(section);
