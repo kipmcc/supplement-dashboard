@@ -14,8 +14,54 @@
     img[src*="github_mark"] { display: none !important; }
     img[src*="logo_min"] { display: none !important; }
     img[src*="logo_full"] { display: none !important; }
+    /* Hide the native ASCIIFlow "<" back caret */
+    .MuiPaper-root > div:first-child > svg,
+    .MuiPaper-root > button:first-child { display: none !important; }
 
-    /* Sidebar toggle button */
+    /* ===== AviFlow Header (persists always) ===== */
+    #aviflow-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      transition: width 0.25s ease;
+    }
+    body.sidebar-open #aviflow-header { width: var(--sidebar-w, 380px); box-sizing: border-box; }
+    body.sidebar-collapsed #aviflow-header { width: auto; }
+    #aviflow-header .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 15px;
+      color: #1f2937;
+      text-decoration: none;
+    }
+    #aviflow-header .logo img { height: 22px; width: 22px; border-radius: 4px; }
+    #aviflow-header .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 11px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #aviflow-header .back-btn:hover { background: #e5e7eb; }
+    body.sidebar-collapsed #aviflow-header .back-btn { display: none; }
+
+    /* ===== Sidebar toggle button ===== */
     #sidebar-toggle {
       position: fixed;
       top: 50%;
@@ -39,33 +85,35 @@
     body.sidebar-open #sidebar-toggle { left: var(--sidebar-w, 380px); }
     body.sidebar-collapsed #sidebar-toggle { left: 0px; }
 
-    /* Sidebar collapse — target the MUI Paper sidebar */
+    /* ===== Sidebar collapse ===== */
     body.sidebar-collapsed .MuiPaper-root,
-    body.sidebar-collapsed [class*="MuiPaper-root"],
-    body.sidebar-collapsed [class*="MuiDrawer"] {
-      transform: translateX(-420px) !important;
+    body.sidebar-collapsed [class*="MuiPaper-root"] {
+      transform: translateX(calc(-1 * var(--sidebar-w, 380px) - 40px)) !important;
       transition: transform 0.25s ease !important;
     }
     body.sidebar-open .MuiPaper-root,
     body.sidebar-open [class*="MuiPaper-root"] {
       transition: transform 0.25s ease !important;
     }
-    body.sidebar-collapsed #aviflow-header { display: none; }
   </style>
   <script defer src="asciiflow.bundle.js"></script>
 </head>
 <body>
-  <button id="sidebar-toggle" title="Toggle sidebar">›</button>
+  <div id="aviflow-header">
+    <span class="logo"><img src="aviado-logo.png" alt=""> AviFlow</span>
+    <a class="back-btn" href="/">← Dashboard</a>
+  </div>
+  <button id="sidebar-toggle" title="Toggle sidebar">‹</button>
   <div id="root"></div>
   <script src="supabase-bridge.js"></script>
   <script>
     // Sidebar toggle logic
     (function() {
       let sidebarW = 380;
+
       function detectSidebar() {
-        // Find the MUI drawer/sidebar
-        const drawers = document.querySelectorAll('[class*="MuiDrawer"], [class*="MuiPaper"]');
-        for (const d of drawers) {
+        const els = document.querySelectorAll('[class*="MuiPaper"]');
+        for (const d of els) {
           if (d.offsetWidth > 200 && d.offsetWidth < 500 && d.offsetHeight > 400) {
             sidebarW = d.offsetWidth;
             document.documentElement.style.setProperty('--sidebar-w', sidebarW + 'px');
@@ -75,52 +123,77 @@
         return null;
       }
 
+      function hideNativeCaret() {
+        // Hide the "<" back caret that ASCIIFlow renders at the top of the sidebar
+        const interval = setInterval(() => {
+          const sidebar = detectSidebar();
+          if (!sidebar) return;
+          // Look for clickable elements near the top that act as back navigation
+          for (const el of sidebar.querySelectorAll('div, button, a, svg')) {
+            const r = el.getBoundingClientRect();
+            const t = (el.textContent || '').trim();
+            // The caret is near top-left, small, contains "<" or is an SVG arrow
+            if (r.top < 80 && r.height < 50 && r.width < 80 &&
+                (t === '<' || t === '‹' || el.tagName === 'svg' || (el.tagName === 'path'))) {
+              // Only hide if it looks like the native back button, not our toggle
+              if (el.id !== 'sidebar-toggle' && !el.closest('#aviflow-header') && !el.closest('#af-cloud')) {
+                el.style.display = 'none';
+              }
+            }
+          }
+          clearInterval(interval);
+        }, 500);
+        setTimeout(() => clearInterval(interval), 5000);
+      }
+
       function initToggle() {
         const btn = document.getElementById('sidebar-toggle');
         if (!btn) return;
         document.body.classList.add('sidebar-open');
+        document.documentElement.style.setProperty('--sidebar-w', sidebarW + 'px');
+        btn.style.left = sidebarW + 'px';
 
-        // Inject AviFlow header into sidebar
-        const interval = setInterval(() => {
-          const sidebar = detectSidebar();
-          if (!sidebar) return;
-          clearInterval(interval);
+        hideNativeCaret();
 
-          // Update toggle position
-          btn.style.left = sidebarW + 'px';
-
-          // Add AviFlow header at top of sidebar
-          const header = document.createElement('div');
-          header.id = 'aviflow-header';
-          header.innerHTML = `<a href="/" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;text-decoration:none;color:#1f2937;font-weight:600;font-size:15px;">
-            <img src="aviado-logo.png" alt="" style="height:22px;width:22px;border-radius:4px;"> AviFlow
-          </a>`;
-          header.style.cssText = 'border-bottom:1px solid #e5e7eb;padding:4px 0;';
-          sidebar.insertBefore(header, sidebar.firstChild);
-        }, 500);
+        // Save/restore canvas offset across toggles
+        let savedOffset = null;
+        let savedZoom = null;
 
         btn.addEventListener('click', () => {
+          const canvas = window.__aviflow_store?.currentCanvas;
+
+          // Save offset BEFORE toggling
+          if (canvas) {
+            savedOffset = { x: canvas.offset.x, y: canvas.offset.y };
+            savedZoom = canvas.zoom;
+          }
+
           const collapsed = document.body.classList.toggle('sidebar-collapsed');
           document.body.classList.toggle('sidebar-open', !collapsed);
           btn.textContent = collapsed ? '›' : '‹';
           btn.style.left = collapsed ? '0px' : sidebarW + 'px';
 
-          // Resize canvas after toggle
+          // Restore offset AFTER toggle (prevent ASCIIFlow from resetting it)
           setTimeout(() => {
-            const canvas = document.getElementById('ascii-canvas');
-            if (canvas) {
-              canvas.width = document.documentElement.clientWidth;
-              canvas.height = document.documentElement.clientHeight;
-              window.dispatchEvent(new Event('resize'));
+            if (canvas && savedOffset) {
+              canvas.setOffset(savedOffset);
+              canvas.setZoom(savedZoom || 1);
             }
-          }, 300);
+          }, 50);
+          // Also restore after resize triggers
+          setTimeout(() => {
+            if (canvas && savedOffset) {
+              canvas.setOffset(savedOffset);
+              canvas.setZoom(savedZoom || 1);
+            }
+          }, 350);
         });
       }
 
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initToggle);
       } else {
-        initToggle();
+        setTimeout(initToggle, 100);
       }
     })();
   </script>

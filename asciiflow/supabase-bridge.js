@@ -1,7 +1,7 @@
 /**
- * AviFlow — Supabase Bridge v4
+ * AviFlow — Supabase Bridge v5
  * Direct canvas integration via __aviflow_api (exposed from modified ASCIIFlow source).
- * No localStorage hacks, no share URLs, no forking.
+ * Native Unicode box-drawing characters throughout.
  */
 
 const SUPABASE_URL = 'https://xijsvdhffiuxpepswnyb.supabase.co';
@@ -51,57 +51,45 @@ async function apiDelete(id) {
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
-// ===================== Canvas API (via modified ASCIIFlow) =====================
+// ===================== Canvas API =====================
 
 function loadToCanvas(text) {
   if (window.__aviflow_api) {
     window.__aviflow_api.loadText(text);
-    centerOnContent(text);
+    topLeftJustify();
     return true;
   }
-  console.error('AviFlow API not available — ASCIIFlow bundle may not be modified');
+  console.error('AviFlow API not available');
   return false;
 }
 
 /**
- * Center the viewport on the loaded content.
- * In ASCIIFlow's coordinate system:
- * - Grid cell (gx,gy) draws at pixel (gx*CHAR_H - offset.x, gy*CHAR_V - offset.y)
- *   PLUS a translate of (canvasWidth/2, canvasHeight/2).
- * - The sidebar overlays the left ~380px of the canvas.
- * - To center content in the VISIBLE area (right of sidebar), we set offset so that
- *   the content midpoint lands at the center of the visible region.
+ * Position viewport so content starts at the top-left of the visible canvas area.
+ * ASCIIFlow coordinate system:
+ *   screen_pos = translate(canvasW/2, canvasH/2) + (gridPos * charSize - offset)
+ * Content at grid (0,0) appears at screen center when offset=(0,0).
+ * To put grid (0,0) at the top-left visible area (accounting for sidebar):
+ *   we need offset.x = -(canvasW/2 - sidebarW - padding)
+ * But offset can't meaningfully go negative in ASCIIFlow's model, so we use
+ * a small positive offset that accounts for the translate.
  */
-function centerOnContent(text) {
+function topLeftJustify() {
   const canvas = window.__aviflow_store?.currentCanvas;
   if (!canvas) return;
-  const CHAR_H = 9, CHAR_V = 16;
-
-  if (!text || !text.trim()) {
-    canvas.setZoom(1);
-    return;
-  }
-  const lines = text.split('\n');
-  let maxCol = 0;
-  for (const line of lines) if (line.length > maxCol) maxCol = line.length;
-  const rowCount = lines.length;
-
-  // Content center in grid coords
-  const cCol = maxCol / 2;
-  const cRow = rowCount / 2;
-
-  // The visible area starts after the sidebar
-  // screen_x of cell (gx) = canvasW/2 + gx*CHAR_H - offset.x
-  // We want cell cCol to appear at: sidebarW + (canvasW - sidebarW)/2 = (canvasW + sidebarW)/2
-  // So: (canvasW + sidebarW)/2 = canvasW/2 + cCol*CHAR_H - offset.x
-  // => offset.x = cCol*CHAR_H - sidebarW/2
-  // For Y: we want cRow at canvasH/2
-  // canvasH/2 = canvasH/2 + cRow*CHAR_V - offset.y => offset.y = cRow*CHAR_V
-  const sidebarW = 380;
-  const offsetX = cCol * CHAR_H - sidebarW / 2;
-  const offsetY = cRow * CHAR_V;
-
-  canvas.setOffset({x: Math.max(0, offsetX), y: Math.max(0, offsetY)});
+  // Place content at top-left of visible area
+  // The translate shifts everything by (canvasW/2, canvasH/2).
+  // Cell (0,0) at offset (ox, oy) appears at screen (canvasW/2 - ox, canvasH/2 - oy).
+  // We want it near top-left of visible area: (sidebarW + pad, pad)
+  // So: canvasW/2 - ox = sidebarW + pad  =>  ox = canvasW/2 - sidebarW - pad
+  // And: canvasH/2 - oy = pad  =>  oy = canvasH/2 - pad
+  const sidebarOpen = !document.body.classList.contains('sidebar-collapsed');
+  const sidebarW = sidebarOpen ? 380 : 0;
+  const pad = 20;
+  const cw = document.documentElement.clientWidth;
+  const ch = document.documentElement.clientHeight;
+  const ox = cw / 2 - sidebarW - pad;
+  const oy = ch / 2 - pad;
+  canvas.setOffset({ x: Math.max(0, ox), y: Math.max(0, oy) });
   canvas.setZoom(1);
 }
 
@@ -114,6 +102,7 @@ function readFromCanvas() {
 
 let currentId = null;
 let currentTitle = null;
+let currentProject = null;
 let lastSaved = '';
 
 // ===================== UI =====================
@@ -158,8 +147,8 @@ function buildPanel(sidebar) {
   const sec = document.createElement('div');
   sec.id = 'af-cloud';
   sec.innerHTML = `<style>
-#af-cloud{border-top:2px solid #3b82f6;margin-top:8px;padding:12px 16px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:#333}
-#af-cloud .hdr{font-weight:700;font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+#af-cloud{padding:8px 16px 12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:#333;margin-top:44px}
+#af-cloud .hdr{font-weight:700;font-size:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 #af-cloud .btn{padding:2px 8px;border-radius:3px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:10px;color:#374151}
 #af-cloud .btn:hover{background:#f3f4f6}
 #af-cloud .btn-b{background:#3b82f6;color:#fff;border-color:#3b82f6}
@@ -172,30 +161,24 @@ function buildPanel(sidebar) {
 #af-cloud .nm{font-weight:600;font-size:13px;display:flex;justify-content:space-between}
 #af-cloud .mt{font-size:11px;color:#9ca3af;margin-top:2px}
 #af-cloud .acts{margin-top:4px;display:flex;gap:4px}
-#af-cloud .sav{margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb}
-#af-cloud .sav input{width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;margin-bottom:6px;box-sizing:border-box}
-#af-cloud .sav-btns{display:flex;gap:4px}
-#af-cloud .sav-btns .btn{flex:1;padding:5px;font-size:11px;text-align:center}
 #af-cloud .sts{font-size:11px;padding:4px 0;text-align:center;min-height:18px}
 #af-cloud .sts.ok{color:#059669}
 #af-cloud .sts.err{color:#dc2626}
 #af-cloud .emp{color:#9ca3af;text-align:center;padding:12px;font-size:12px}
 #af-cloud .flt input{width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;box-sizing:border-box;margin-bottom:8px}
+#af-cloud .act-bar{display:flex;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb}
+#af-cloud .act-bar .btn{flex:1;padding:5px;font-size:11px;text-align:center}
 </style>
 <div class="hdr">☁️ Cloud Diagrams <button class="btn" onclick="_af.refresh()">↻</button></div>
 <div class="flt"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()"/></div>
 <div id="af-lst"><div class="emp">Loading...</div></div>
 <div id="af-sts" class="sts"></div>
-<div class="sav">
-  <input id="af-t" placeholder="Diagram title..."/>
-  <input id="af-p" placeholder="Project (e.g. outpost)"/>
-  <div class="sav-btns">
-    <button class="btn btn-b" onclick="_af.save()">💾 Save</button>
-    <button class="btn" onclick="_af.saveNew()">➕ New</button>
-    <button class="btn" onclick="_af.copy()">📋 Copy</button>
-  </div>
+<div class="act-bar">
+  <button class="btn btn-b" onclick="_af.save()">💾 Save</button>
+  <button class="btn" onclick="_af.saveNew()">+ New</button>
+  <button class="btn" onclick="_af.copy()">📋 Copy</button>
 </div>
-<div style="padding:8px 0 0;font-size:10px;color:#9ca3af;line-height:1.6">
+<div style="padding:6px 0 0;font-size:10px;color:#9ca3af;line-height:1.6">
   <b style="color:#6b7280">Keys:</b> ⌘Z undo · ⌘⇧Z redo · Space+drag pan · B box · V select · D freeform · A arrow · L line · T text
 </div>`;
 
@@ -246,28 +229,37 @@ async function doLoad(id) {
   if (!loadToCanvas(d.content)) { msg('Canvas API not ready — try refreshing','err'); return; }
   currentId = d.id;
   currentTitle = d.title;
+  currentProject = d.project_key || null;
   lastSaved = d.content;
-  const t = document.getElementById('af-t');
-  const p = document.getElementById('af-p');
-  if (t) t.value = d.title;
-  if (p) p.value = d.project_key || '';
   msg(`Loaded "${d.title}"`, 'ok');
   refreshList();
 }
 
 async function doSave() {
-  const title = (document.getElementById('af-t')?.value||'').trim() || 'Untitled';
-  const proj = (document.getElementById('af-p')?.value||'').trim() || null;
   const ascii = readFromCanvas();
   if (!ascii) { msg('Nothing to save — draw first!','err'); return; }
+  // Use stored title/project for existing diagrams, prompt for new
+  let title = currentTitle || 'Untitled';
+  let proj = currentProject;
+  if (!currentId) {
+    title = prompt('Diagram title:', 'Untitled') || 'Untitled';
+    proj = prompt('Project key (optional):', '') || null;
+  }
   const r = await apiSave(currentId, title, ascii, proj, 'dashboard');
-  if (Array.isArray(r) && r[0]) { currentId = r[0].id; currentTitle = r[0].title; lastSaved = ascii; }
+  if (Array.isArray(r) && r[0]) {
+    currentId = r[0].id;
+    currentTitle = r[0].title;
+    currentProject = r[0].project_key || null;
+    lastSaved = ascii;
+  }
   msg(`Saved "${title}"`,'ok');
   refreshList();
 }
 
 async function doSaveNew() {
   currentId = null;
+  currentTitle = null;
+  currentProject = null;
   await doSave();
 }
 
@@ -275,7 +267,7 @@ function doRename(id, cur) {
   const n = prompt('Rename:', cur||'');
   if (!n || n === cur) return;
   apiRename(id, n).then(() => {
-    if (id === currentId) { currentTitle = n; const t = document.getElementById('af-t'); if (t) t.value = n; }
+    if (id === currentId) currentTitle = n;
     msg(`Renamed to "${n}"`,'ok');
     refreshList();
   });
@@ -292,7 +284,7 @@ async function doDup(id) {
 async function doDel(id) {
   if (!confirm('Delete this diagram and all versions?')) return;
   await apiDelete(id);
-  if (currentId === id) { currentId = null; currentTitle = null; }
+  if (currentId === id) { currentId = null; currentTitle = null; currentProject = null; }
   msg('Deleted','ok');
   refreshList();
 }
@@ -310,11 +302,77 @@ setInterval(() => {
   if (!currentId) return;
   const ascii = readFromCanvas();
   if (ascii && ascii !== lastSaved) {
-    const title = document.getElementById('af-t')?.value || currentTitle || 'Untitled';
-    const proj = document.getElementById('af-p')?.value || null;
+    const title = currentTitle || 'Untitled';
+    const proj = currentProject;
     apiSave(currentId, title, ascii, proj, 'dashboard').then(() => { lastSaved = ascii; msg('Auto-saved','ok'); }).catch(()=>{});
   }
 }, 30000);
+
+// ===================== Diagram Scrub =====================
+
+/**
+ * Scrub a diagram to fix alignment issues:
+ * 1. Ensure all rows in the same box have consistent width (right edges align)
+ * 2. Fix disconnected corners where horizontal and vertical lines don't meet
+ * 3. Remove trailing whitespace inconsistencies
+ */
+function scrubDiagram(text) {
+  if (!text) return text;
+  let lines = text.split('\n');
+
+  // Remove trailing whitespace from each line
+  lines = lines.map(l => l.trimEnd());
+
+  // Remove empty trailing lines
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+
+  // Find the maximum content width
+  const maxW = Math.max(...lines.map(l => l.length));
+
+  // Pad all lines to uniform width (needed for consistent box edges)
+  lines = lines.map(l => l.padEnd(maxW));
+
+  // Build a grid for analysis
+  const grid = lines.map(l => [...l]);
+  const H = grid.length;
+  const W = maxW;
+
+  function at(r,c) { return (r>=0 && r<H && c>=0 && c<W) ? grid[r][c] : ' '; }
+  function isH(ch) { return '─━'.includes(ch); }
+  function isV(ch) { return '│┃'.includes(ch); }
+  function isCorner(ch) { return '┌┐└┘├┤┬┴┼'.includes(ch); }
+  function isStructural(ch) { return isH(ch) || isV(ch) || isCorner(ch); }
+
+  // Pass 1: Fix corners that should connect but don't
+  // Look for patterns like: ─ [space] │ where the space should be a corner
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < W; c++) {
+      if (grid[r][c] !== ' ') continue;
+
+      const up = isV(at(r-1,c)) || isCorner(at(r-1,c));
+      const down = isV(at(r+1,c)) || isCorner(at(r+1,c));
+      const left = isH(at(r,c-1)) || isCorner(at(r,c-1));
+      const right = isH(at(r,c+1)) || isCorner(at(r,c+1));
+
+      // Only fill if it would create a valid junction (at least 2 connections)
+      const connections = [up, down, left, right].filter(Boolean).length;
+      if (connections >= 2) {
+        if (down && right && !up && !left) grid[r][c] = '┌';
+        else if (down && left && !up && !right) grid[r][c] = '┐';
+        else if (up && right && !down && !left) grid[r][c] = '└';
+        else if (up && left && !down && !right) grid[r][c] = '┘';
+        else if (up && down && right && !left) grid[r][c] = '├';
+        else if (up && down && left && !right) grid[r][c] = '┤';
+        else if (down && left && right && !up) grid[r][c] = '┬';
+        else if (up && left && right && !down) grid[r][c] = '┴';
+        else if (up && down && left && right) grid[r][c] = '┼';
+      }
+    }
+  }
+
+  // Rebuild text, trim trailing spaces
+  return grid.map(r => r.join('').trimEnd()).join('\n');
+}
 
 // ===================== Helpers =====================
 
@@ -329,6 +387,7 @@ function fmt(iso) { if(!iso)return''; const d=new Date(iso); return d.toLocaleDa
 // ===================== Init =====================
 
 window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSaveNew,
-  rename: doRename, dup: doDup, del: doDel, copy: doCopy };
+  rename: doRename, dup: doDup, del: doDel, copy: doCopy, scrub: scrubDiagram,
+  topLeft: topLeftJustify };
 
 window.addEventListener('DOMContentLoaded', injectUI);
