@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 06:50 CST by Maureen*
+*Last updated: 2026-02-10 06:55 CST by Maureen*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -329,7 +329,9 @@ Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collabora
 - ☁️ Diagrams button in top-right opens save/load panel
 - Auto-saves every 30 seconds when a diagram is loaded
 - Diagrams stored in `diagrams` table (id, title, content, project_key, created_by)
-- **Planned:** Version history, team collaboration, AI how-to page
+- **Version history**: `diagram_versions` table, viewable via 📜 History button, restore any version
+- **Markdown export**: 📋 Copy as Markdown — wraps diagram in code block for specs
+- Each save creates a version snapshot for rollback, AI how-to page
 
 ### Rebuilding After Source Changes
 ```bash

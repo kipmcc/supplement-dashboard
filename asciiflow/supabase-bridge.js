@@ -46,6 +46,28 @@ async function deleteDiagram(id) {
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
+async function saveVersion(diagramId, content, savedBy) {
+  await fetch(`${API}/diagram_versions`, {
+    method: 'POST',
+    headers: HEADERS,
+    body: JSON.stringify({ diagram_id: diagramId, content, saved_by: savedBy })
+  });
+  // Increment version count
+  const diagram = await loadDiagram(diagramId);
+  if (diagram) {
+    await fetch(`${API}/diagrams?id=eq.${diagramId}`, {
+      method: 'PATCH',
+      headers: HEADERS,
+      body: JSON.stringify({ version_count: (diagram.version_count || 0) + 1 })
+    });
+  }
+}
+
+async function getVersions(diagramId) {
+  const res = await fetch(`${API}/diagram_versions?diagram_id=eq.${diagramId}&order=created_at.desc&limit=20`, { headers: HEADERS });
+  return res.json();
+}
+
 async function loadDiagram(id) {
   const res = await fetch(`${API}/diagrams?id=eq.${id}`, { headers: HEADERS });
   const data = await res.json();
@@ -200,9 +222,13 @@ function createPanel() {
     <div class="save-form">
       <input type="text" id="save-title" placeholder="Diagram title..." />
       <input type="text" id="save-project" placeholder="Project key (optional)" />
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 6px;">
         <button class="btn btn-primary" onclick="handleSave()" style="flex:1;">💾 Save</button>
         <button class="btn btn-secondary" onclick="handleSaveNew()" style="flex:1;">➕ Save New</button>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="handleExportMarkdown()" style="flex:1;">📋 Copy as Markdown</button>
+        <button class="btn btn-secondary" onclick="handleShowHistory()" style="flex:1;">📜 History</button>
       </div>
     </div>
   `;
@@ -240,6 +266,7 @@ async function refreshList() {
         <div class="diagram-meta">
           ${d.project_key ? `📁 ${escapeHtml(d.project_key)} · ` : ''}
           ${d.created_by ? `👤 ${escapeHtml(d.created_by)} · ` : ''}
+          ${d.version_count ? `v${d.version_count} · ` : ''}
           ${formatDate(d.updated_at)}
         </div>
         <div style="margin-top:6px;">
@@ -285,8 +312,62 @@ async function handleSave() {
   const result = await saveDiagram(currentDiagramId, title, content, projectKey, 'dashboard');
   if (Array.isArray(result) && result[0]) {
     currentDiagramId = result[0].id;
+    // Save version snapshot
+    await saveVersion(currentDiagramId, content, 'dashboard');
   }
   refreshList();
+}
+
+async function handleExportMarkdown() {
+  const title = document.getElementById('save-title').value || 'Untitled';
+  const content = getCurrentDrawingText();
+  if (!content) { alert('Nothing to export'); return; }
+  
+  // Try to decode the stored layer into readable text
+  let text = content;
+  try {
+    // The content is a serialized Layer — attempt to extract readable ASCII
+    // For now, wrap the raw content in a code block
+    text = content;
+  } catch(e) {}
+  
+  const markdown = '```\n' + title + '\n' + '```\n\n' + '```\n' + text + '\n```';
+  await navigator.clipboard.writeText(markdown);
+  alert('Copied as markdown!');
+}
+
+async function handleShowHistory() {
+  if (!currentDiagramId) { alert('Load a diagram first to see its history'); return; }
+  
+  const versions = await getVersions(currentDiagramId);
+  const listEl = document.getElementById('diagram-list');
+  
+  if (!versions.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#6b7280;">No version history yet.<br>Save the diagram to create a version.</div><div style="padding:12px;"><button class="btn btn-secondary" onclick="refreshList()" style="width:100%;">← Back to diagrams</button></div>';
+    return;
+  }
+  
+  listEl.innerHTML = `
+    <div style="padding:8px 0 12px;"><button class="btn btn-secondary" onclick="refreshList()" style="width:100%;">← Back to diagrams</button></div>
+    <div style="font-weight:600;margin-bottom:8px;">📜 Version History (${versions.length})</div>
+    ${versions.map((v, i) => `
+      <div class="diagram-item" onclick="handleLoadVersion('${v.id}', '${v.diagram_id}')">
+        <div class="diagram-title">v${versions.length - i} — ${escapeHtml(v.saved_by)}</div>
+        <div class="diagram-meta">${formatDate(v.created_at)}</div>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function handleLoadVersion(versionId, diagramId) {
+  const res = await fetch(\`\${API}/diagram_versions?id=eq.\${versionId}\`, { headers: HEADERS });
+  const data = await res.json();
+  if (!data[0]) { alert('Version not found'); return; }
+  
+  const drawingName = getCurrentDrawingName();
+  const key = \`drawing/\${encodeURIComponent(\`local/\${encodeURIComponent(drawingName)}\`)}/committed-layer\`;
+  localStorage.setItem(key, data[0].content);
+  window.location.reload();
 }
 
 async function handleSaveNew() {
@@ -350,3 +431,7 @@ window.handleLoad = handleLoad;
 window.handleSave = handleSave;
 window.handleSaveNew = handleSaveNew;
 window.handleDelete = handleDelete;
+window.handleExportMarkdown = handleExportMarkdown;
+window.handleShowHistory = handleShowHistory;
+window.handleLoadVersion = handleLoadVersion;
+window.refreshList = refreshList;
