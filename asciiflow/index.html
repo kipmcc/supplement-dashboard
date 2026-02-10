@@ -14,42 +14,109 @@
     img[src*="github_mark"] { display: none !important; }
     img[src*="logo_min"] { display: none !important; }
     img[src*="logo_full"] { display: none !important; }
-    #aviado-nav {
+
+    /* Sidebar toggle button */
+    #sidebar-toggle {
       position: fixed;
-      top: 12px;
-      left: 12px;
-      z-index: 9999;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    #aviado-nav a {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10000;
+      width: 24px;
+      height: 48px;
       background: #1f2937;
       color: #e5e7eb;
       border: 1px solid #374151;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      text-decoration: none;
+      border-radius: 0 6px 6px 0;
       cursor: pointer;
-      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: left 0.25s ease, background 0.15s;
+      padding: 0;
     }
-    #aviado-nav a:hover {
-      background: #374151;
-      color: #fff;
+    #sidebar-toggle:hover { background: #374151; color: #fff; }
+    body.sidebar-open #sidebar-toggle { left: var(--sidebar-w, 380px); }
+    body.sidebar-collapsed #sidebar-toggle { left: 0px; }
+
+    /* Sidebar collapse */
+    body.sidebar-collapsed .MuiDrawer-root,
+    body.sidebar-collapsed [class*="MuiDrawer"] {
+      transform: translateX(calc(-1 * var(--sidebar-w, 380px))) !important;
     }
+    body.sidebar-collapsed #af-cloud { display: none; }
   </style>
   <script defer src="asciiflow.bundle.js"></script>
 </head>
 <body>
-  <div id="aviado-nav">
-    <a href="/"><img src="aviado-logo.png" alt="Aviado" style="height:22px;width:22px;border-radius:4px;"> AviFlow</a>
-  </div>
+  <button id="sidebar-toggle" title="Toggle sidebar">›</button>
   <div id="root"></div>
   <script src="supabase-bridge.js"></script>
+  <script>
+    // Sidebar toggle logic
+    (function() {
+      let sidebarW = 380;
+      function detectSidebar() {
+        // Find the MUI drawer/sidebar
+        const drawers = document.querySelectorAll('[class*="MuiDrawer"], [class*="MuiPaper"]');
+        for (const d of drawers) {
+          if (d.offsetWidth > 200 && d.offsetWidth < 500 && d.offsetHeight > 400) {
+            sidebarW = d.offsetWidth;
+            document.documentElement.style.setProperty('--sidebar-w', sidebarW + 'px');
+            return d;
+          }
+        }
+        return null;
+      }
+
+      function initToggle() {
+        const btn = document.getElementById('sidebar-toggle');
+        if (!btn) return;
+        document.body.classList.add('sidebar-open');
+
+        // Inject AviFlow header into sidebar
+        const interval = setInterval(() => {
+          const sidebar = detectSidebar();
+          if (!sidebar) return;
+          clearInterval(interval);
+
+          // Update toggle position
+          btn.style.left = sidebarW + 'px';
+
+          // Add AviFlow header at top of sidebar
+          const header = document.createElement('div');
+          header.id = 'aviflow-header';
+          header.innerHTML = `<a href="/" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;text-decoration:none;color:#1f2937;font-weight:600;font-size:15px;">
+            <img src="aviado-logo.png" alt="" style="height:22px;width:22px;border-radius:4px;"> AviFlow
+          </a>`;
+          header.style.cssText = 'border-bottom:1px solid #e5e7eb;padding:4px 0;';
+          sidebar.insertBefore(header, sidebar.firstChild);
+        }, 500);
+
+        btn.addEventListener('click', () => {
+          const collapsed = document.body.classList.toggle('sidebar-collapsed');
+          document.body.classList.toggle('sidebar-open', !collapsed);
+          btn.textContent = collapsed ? '›' : '‹';
+          btn.style.left = collapsed ? '0px' : sidebarW + 'px';
+
+          // Resize canvas after toggle
+          setTimeout(() => {
+            const canvas = document.getElementById('ascii-canvas');
+            if (canvas) {
+              canvas.width = document.documentElement.clientWidth;
+              canvas.height = document.documentElement.clientHeight;
+              window.dispatchEvent(new Event('resize'));
+            }
+          }, 300);
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initToggle);
+      } else {
+        initToggle();
+      }
+    })();
+  </script>
 </body>
 </html>

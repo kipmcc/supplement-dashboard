@@ -51,73 +51,10 @@ async function apiDelete(id) {
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
-// ===================== ASCII → Unicode Converter =====================
-
-/**
- * Convert ASCII box-drawing characters (+, -, |) to ASCIIFlow's native Unicode
- * box-drawing characters (┌┐└┘─│├┤┬┴┼) with smart corner/junction detection.
- */
-function asciiToUnicode(text) {
-  const lines = text.split('\n');
-  const grid = lines.map(l => [...l]);
-  const maxW = Math.max(...grid.map(r => r.length));
-  // Pad all rows to same width
-  grid.forEach(r => { while (r.length < maxW) r.push(' '); });
-  const H = grid.length;
-
-  function at(r,c) { return (r>=0 && r<H && c>=0 && c<maxW) ? grid[r][c] : ' '; }
-  function isH(ch) { return ch === '-' || ch === '─'; }
-  function isV(ch) { return ch === '|' || ch === '│'; }
-  function isJunction(ch) { return ch === '+' || '┌┐└┘├┤┬┴┼'.includes(ch); }
-  function isStructural(ch) { return isH(ch) || isV(ch) || isJunction(ch); }
-
-  const result = grid.map(r => [...r]);
-
-  for (let r = 0; r < H; r++) {
-    for (let c = 0; c < maxW; c++) {
-      const ch = grid[r][c];
-      if (ch === '-') {
-        // Only convert '-' to '─' if it's part of a horizontal line
-        // (adjacent to another '-', '+', or box-drawing char)
-        const leftCh = at(r,c-1);
-        const rightCh = at(r,c+1);
-        const isLine = isH(leftCh) || isH(rightCh) || isJunction(leftCh) || isJunction(rightCh);
-        if (isLine) result[r][c] = '─';
-      } else if (ch === '|') {
-        result[r][c] = '│';
-      } else if (ch === '+') {
-        // Detect connections in 4 directions
-        const up = isV(at(r-1,c)) || isJunction(at(r-1,c));
-        const down = isV(at(r+1,c)) || isJunction(at(r+1,c));
-        const left = isH(at(r,c-1)) || isJunction(at(r,c-1));
-        const right = isH(at(r,c+1)) || isJunction(at(r,c+1));
-
-        if (down && right && !up && !left) result[r][c] = '┌';
-        else if (down && left && !up && !right) result[r][c] = '┐';
-        else if (up && right && !down && !left) result[r][c] = '└';
-        else if (up && left && !down && !right) result[r][c] = '┘';
-        else if (up && down && right && !left) result[r][c] = '├';
-        else if (up && down && left && !right) result[r][c] = '┤';
-        else if (down && left && right && !up) result[r][c] = '┬';
-        else if (up && left && right && !down) result[r][c] = '┴';
-        else if (up && down && left && right) result[r][c] = '┼';
-        else if (left && right) result[r][c] = '─';
-        else if (up && down) result[r][c] = '│';
-        else result[r][c] = '+'; // keep as-is if ambiguous
-      }
-    }
-  }
-  return result.map(r => r.join('')).join('\n');
-}
-
 // ===================== Canvas API (via modified ASCIIFlow) =====================
 
 function loadToCanvas(text) {
   if (window.__aviflow_api) {
-    // Auto-convert ASCII box chars to Unicode if needed
-    if (text.includes('+--') || text.includes('-+-')) {
-      text = asciiToUnicode(text);
-    }
     window.__aviflow_api.loadText(text);
     centerOnContent(text);
     return true;
