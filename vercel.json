@@ -1,19 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "**/*",
-      "use": "@vercel/static"
-    }
-  ],
+  "buildCommand": "",
+  "outputDirectory": ".",
   "routes": [
     { "src": "/api/auth", "dest": "/api/auth.js" },
-    { "src": "/api/verify", "dest": "/api/verify.js" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/$1" }
+    { "src": "/api/verify", "dest": "/api/verify.js" }
   ]
 }
