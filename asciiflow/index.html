@@ -156,19 +156,25 @@
         hideNativeCaret();
 
         btn.addEventListener('click', () => {
+          const canvas = window.__aviflow_store?.currentCanvas;
+          // Save offset before toggle
+          const savedOffset = canvas ? { x: canvas.offset.x, y: canvas.offset.y } : null;
+          const savedZoom = canvas ? canvas.zoom : null;
+
           const collapsed = document.body.classList.toggle('sidebar-collapsed');
           document.body.classList.toggle('sidebar-open', !collapsed);
           btn.textContent = collapsed ? '›' : '‹';
           btn.style.left = collapsed ? '0px' : sidebarW + 'px';
 
-          // Re-justify canvas for the new sidebar state
-          // Use slight delay to let CSS transition complete
-          setTimeout(() => {
-            if (window._af && window._af.topLeft) window._af.topLeft();
-          }, 50);
-          setTimeout(() => {
-            if (window._af && window._af.topLeft) window._af.topLeft();
-          }, 300);
+          // Restore offset after toggle to keep diagram centered
+          const restore = () => {
+            if (canvas && savedOffset) {
+              canvas.setOffset(savedOffset);
+              if (savedZoom) canvas.setZoom(savedZoom);
+            }
+          };
+          setTimeout(restore, 50);
+          setTimeout(restore, 300);
         });
       }
 
