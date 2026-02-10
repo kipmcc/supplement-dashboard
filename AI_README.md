@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 06:40 CST by Maureen*
+*Last updated: 2026-02-10 06:50 CST by Maureen*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -325,8 +325,11 @@ Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collabora
 
 ### Features
 - Fullscreen mode button
-- Currently uses localStorage for persistence (browser-local)
-- **Planned:** Supabase persistence, project-linked diagrams, version history, AI how-to page
+- **Supabase persistence** via `supabase-bridge.js` — save/load/delete diagrams
+- ☁️ Diagrams button in top-right opens save/load panel
+- Auto-saves every 30 seconds when a diagram is loaded
+- Diagrams stored in `diagrams` table (id, title, content, project_key, created_by)
+- **Planned:** Version history, team collaboration, AI how-to page
 
 ### Rebuilding After Source Changes
 ```bash
