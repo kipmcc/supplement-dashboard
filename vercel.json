@@ -20,6 +20,10 @@
     {
       "src": "*.md",
       "use": "@vercel/static"
+    },
+    {
+      "src": "asciiflow/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
