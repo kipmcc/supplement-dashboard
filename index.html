@@ -539,17 +539,6 @@
         </p>
       </div>
 
-      <!-- Ongoing Tasks (Background Processes) -->
-      <div class="mb-6">
-        <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-          🔄 Ongoing Tasks
-          <span class="text-xs font-normal text-gray-400">(Background Processes)</span>
-        </h3>
-        <div id="ongoingTasksContainer" class="space-y-3">
-          <div class="text-gray-400 text-sm">Loading ongoing tasks...</div>
-        </div>
-      </div>
-
       <!-- Task Filter Tabs -->
       <div class="flex gap-2 mb-4 border-b border-gray-700 pb-3">
         <button onclick="filterTasks('open')" id="task-filter-open" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-blue-600 text-white border-b-2 border-blue-400">
@@ -558,9 +547,17 @@
         <button onclick="filterTasks('completed')" id="task-filter-completed" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
           ✅ Completed
         </button>
+        <button onclick="filterTasks('ongoing')" id="task-filter-ongoing" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
+          🔄 Ongoing
+        </button>
         <button onclick="filterTasks('all')" id="task-filter-all" class="px-4 py-2 rounded-t-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-300">
           📑 All
         </button>
+      </div>
+
+      <!-- Ongoing Tasks Container (shown when Ongoing tab active) -->
+      <div id="ongoingTasksContainer" class="space-y-3 hidden">
+        <div class="text-gray-400 text-sm">Loading ongoing tasks...</div>
       </div>
 
       <!-- Dynamic Task Queue -->

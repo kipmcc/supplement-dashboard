@@ -857,7 +857,7 @@
       currentTaskFilter = filter;
       
       // Update tab button styles
-      ['open', 'completed', 'all'].forEach(f => {
+      ['open', 'completed', 'ongoing', 'all'].forEach(f => {
         const btn = document.getElementById('task-filter-' + f);
         if (btn) {
           if (f === filter) {
@@ -868,9 +868,23 @@
         }
       });
       
-      // Re-render with filter
-      if (allTasks.length > 0) {
-        renderTaskQueue(filterTasksByStatus(allTasks, filter));
+      // Show/hide appropriate containers
+      const taskQueueContainer = document.getElementById('taskQueueContainer');
+      const ongoingContainer = document.getElementById('ongoingTasksContainer');
+      
+      if (filter === 'ongoing') {
+        // Show ongoing tasks, hide regular task queue
+        if (taskQueueContainer) taskQueueContainer.classList.add('hidden');
+        if (ongoingContainer) ongoingContainer.classList.remove('hidden');
+        loadOngoingTasks();
+      } else {
+        // Show regular task queue, hide ongoing
+        if (taskQueueContainer) taskQueueContainer.classList.remove('hidden');
+        if (ongoingContainer) ongoingContainer.classList.add('hidden');
+        // Re-render with filter
+        if (allTasks.length > 0) {
+          renderTaskQueue(filterTasksByStatus(allTasks, filter));
+        }
       }
     }
     
