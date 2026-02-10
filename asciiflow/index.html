@@ -8,10 +8,41 @@
   <style>
     * { font-family: Roboto, sans-serif; }
     body { margin: 0px; }
+    #aviado-nav {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 9999;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #aviado-nav a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: #1f2937;
+      color: #e5e7eb;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #aviado-nav a:hover {
+      background: #374151;
+      color: #fff;
+    }
   </style>
   <script defer src="asciiflow.bundle.js"></script>
 </head>
 <body>
+  <div id="aviado-nav">
+    <a href="/">← Dashboard</a>
+  </div>
   <div id="root"></div>
 </body>
 </html>
