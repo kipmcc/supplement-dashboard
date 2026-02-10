@@ -1,9 +1,0 @@
-node_modules
-bazel-*
-yarn-error.log
-user.bazelrc
-MODULE.bazel.lock
-pnpm-lock.yaml
-package-lock.json
-dist/
-node_modules/
