@@ -138,6 +138,16 @@ function injectIntoSidebar() {
 
     if (sidebar) {
       clearInterval(interval);
+      // Try to collapse the Help section to make room
+      const helpHeaders = sidebar.querySelectorAll('div, span, p');
+      for (const el of helpHeaders) {
+        if (el.textContent.trim() === 'Help' && el.offsetWidth > 50) {
+          // Click to collapse if it has an expand/collapse toggle
+          const chevron = el.parentElement?.querySelector('[class*="chevron"], [class*="expand"], svg');
+          if (chevron) { try { chevron.click(); } catch {} }
+          break;
+        }
+      }
       createSidebarSection(sidebar);
     }
   }, 500);
@@ -307,7 +317,18 @@ function createSidebarSection(sidebar) {
     </div>
   `;
 
-  sidebar.appendChild(section);
+  // Try to insert after File section, before Edit
+  let inserted = false;
+  const children = Array.from(sidebar.children);
+  for (let i = 0; i < children.length; i++) {
+    const text = (children[i].textContent || '').trim();
+    if (text.startsWith('Edit') || text === 'Edit') {
+      sidebar.insertBefore(section, children[i]);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) sidebar.appendChild(section);
   sidebarSection = section;
   refreshCloudList();
 }
