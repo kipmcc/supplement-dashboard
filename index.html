@@ -60,6 +60,9 @@
         <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           ✅ Tasks
         </button>
+        <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          🔄 Pipeline
+        </button>
       </div>
     </div>
   </header>
@@ -86,6 +89,9 @@
       }
       if (tabName === 'projects' && window.loadProjects) {
         window.loadProjects();
+      }
+      if (tabName === 'pipeline' && window.loadPipeline) {
+        window.loadPipeline();
       }
     }
   </script>
@@ -573,6 +579,106 @@
       </div>
 
     </div><!-- End Tasks Tab -->
+
+    <!-- ==================== CONTENT PIPELINE TAB ==================== -->
+    <div id="content-pipeline" class="tab-content">
+
+      <!-- Pipeline Health Summary -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Pipeline Tasks</div>
+          <div id="plTotal" class="text-xl sm:text-3xl font-bold text-white">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Running</div>
+          <div id="plRunning" class="text-xl sm:text-3xl font-bold text-blue-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Completed</div>
+          <div id="plCompleted" class="text-xl sm:text-3xl font-bold text-green-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Failed</div>
+          <div id="plFailed" class="text-xl sm:text-3xl font-bold text-red-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Success Rate</div>
+          <div id="plSuccessRate" class="text-xl sm:text-3xl font-bold text-emerald-400">--</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+
+        <!-- Queue Overview -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>📋</span> Queue Overview
+          </h3>
+          <div id="plQueueOverview" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading queue data...</div>
+          </div>
+        </section>
+
+        <!-- Generation Status -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>⚙️</span> Generation Status
+          </h3>
+          <div id="plGenerationStatus" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading generation status...</div>
+          </div>
+        </section>
+
+        <!-- Review Queue -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>👁️</span> Review Queue
+          </h3>
+          <div id="plReviewQueue" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading review queue...</div>
+          </div>
+        </section>
+
+        <!-- Published Content -->
+        <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span>📰</span> Published Content
+          </h3>
+          <div id="plPublished" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading published content...</div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Pipeline Health -->
+      <section class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <span>💚</span> Pipeline Health
+        </h3>
+        <div id="plHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="loading text-gray-400 text-sm">Loading health metrics...</div>
+        </div>
+      </section>
+
+      <!-- Recent Pipeline Activity -->
+      <section class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <span>📝</span> Recent Pipeline Tasks
+        </h3>
+        <div id="plRecentTasks" class="space-y-2">
+          <div class="loading text-gray-400 text-sm">Loading recent tasks...</div>
+        </div>
+      </section>
+
+      <!-- Refresh -->
+      <div class="mt-6 text-center">
+        <button onclick="loadPipeline()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+          🔄 Refresh Pipeline
+        </button>
+      </div>
+
+    </div><!-- End Pipeline Tab -->
 
   </main>
 

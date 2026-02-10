@@ -938,6 +938,297 @@
     window.loadTaskQueue = loadTaskQueue;
     window.loadProjects = loadProjects;
     
+    // ==================== CONTENT PIPELINE TAB ====================
+    
+    async function loadPipeline() {
+      if (!supabase) return;
+      
+      try {
+        // Fetch all task_queue data
+        const { data: allTasks, error: taskErr } = await supabase
+          .from('task_queue')
+          .select('*')
+          .eq('is_project', false)
+          .order('priority', { ascending: true });
+        
+        if (taskErr) throw taskErr;
+        
+        // Fetch pipeline-category tasks
+        const pipelineTasks = allTasks.filter(t => t.category === 'pipeline');
+        
+        // Fetch content_queue
+        const { data: contentQueue } = await supabase
+          .from('content_queue')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        // Fetch longevity_content (published articles)
+        const { data: longevityContent } = await supabase
+          .from('longevity_content')
+          .select('*')
+          .order('captured_at', { ascending: false });
+        
+        // Fetch digest articles
+        const { data: digestArticles } = await supabase
+          .from('longevity_digest_articles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        const cq = contentQueue || [];
+        const lc = longevityContent || [];
+        const da = digestArticles || [];
+        
+        // --- Summary metrics ---
+        const running = allTasks.filter(t => t.status === 'running').length;
+        const completed = allTasks.filter(t => t.status === 'completed' || t.status === 'complete').length;
+        const failed = allTasks.filter(t => t.status === 'failed').length;
+        const total = allTasks.length;
+        const successRate = (completed + failed) > 0 
+          ? Math.round((completed / (completed + failed)) * 100) + '%' 
+          : 'N/A';
+        
+        document.getElementById('plTotal').textContent = total;
+        document.getElementById('plRunning').textContent = running;
+        document.getElementById('plCompleted').textContent = completed;
+        document.getElementById('plFailed').textContent = failed;
+        document.getElementById('plSuccessRate').textContent = successRate;
+        
+        // --- Queue Overview (by priority, category, status) ---
+        const byPriority = {};
+        const byCategory = {};
+        const byStatus = {};
+        allTasks.forEach(t => {
+          const p = t.priority || 5;
+          byPriority[p] = (byPriority[p] || 0) + 1;
+          const cat = t.category || 'uncategorized';
+          byCategory[cat] = (byCategory[cat] || 0) + 1;
+          byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+        });
+        
+        const priorityLabels = { 1: '🔴 Critical', 2: '🟠 High', 3: '🟡 Medium', 4: '🔵 Low', 5: '⚪ Default' };
+        const priorityColors = { 1: 'text-red-400', 2: 'text-orange-400', 3: 'text-yellow-400', 4: 'text-blue-400', 5: 'text-gray-400' };
+        
+        let queueHtml = '<div class="mb-4"><h4 class="text-sm font-medium text-gray-300 mb-2">By Priority</h4>';
+        Object.keys(byPriority).sort().forEach(p => {
+          queueHtml += `<div class="flex justify-between text-sm py-1 border-b border-gray-700/50">
+            <span>${priorityLabels[p] || 'P' + p}</span>
+            <span class="${priorityColors[p] || 'text-gray-400'} font-mono">${byPriority[p]}</span>
+          </div>`;
+        });
+        queueHtml += '</div>';
+        
+        queueHtml += '<div class="mb-4"><h4 class="text-sm font-medium text-gray-300 mb-2">By Category</h4>';
+        Object.entries(byCategory).sort((a, b) => b[1] - a[1]).slice(0, 8).forEach(([cat, count]) => {
+          queueHtml += `<div class="flex justify-between text-sm py-1 border-b border-gray-700/50">
+            <span class="text-gray-300">${cat}</span>
+            <span class="text-blue-400 font-mono">${count}</span>
+          </div>`;
+        });
+        queueHtml += '</div>';
+        
+        document.getElementById('plQueueOverview').innerHTML = queueHtml;
+        
+        // --- Generation Status ---
+        const statusColors = {
+          pending: 'bg-yellow-500', approved: 'bg-blue-500', running: 'bg-cyan-500',
+          completed: 'bg-green-500', complete: 'bg-green-500', failed: 'bg-red-500', planning: 'bg-purple-500'
+        };
+        
+        let genHtml = '<div class="space-y-3">';
+        Object.entries(byStatus).sort((a, b) => b[1] - a[1]).forEach(([status, count]) => {
+          const pct = Math.round((count / total) * 100);
+          const color = statusColors[status] || 'bg-gray-500';
+          genHtml += `<div>
+            <div class="flex justify-between text-sm mb-1">
+              <span class="capitalize">${status}</span>
+              <span class="text-gray-400">${count} (${pct}%)</span>
+            </div>
+            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div class="h-full ${color} rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>`;
+        });
+        genHtml += '</div>';
+        
+        // Content queue status
+        if (cq.length > 0) {
+          const cqByStatus = {};
+          cq.forEach(c => { cqByStatus[c.status] = (cqByStatus[c.status] || 0) + 1; });
+          genHtml += '<div class="mt-4 pt-3 border-t border-gray-700"><h4 class="text-sm font-medium text-gray-300 mb-2">Content Queue</h4>';
+          Object.entries(cqByStatus).forEach(([s, c]) => {
+            genHtml += `<div class="flex justify-between text-sm py-1"><span class="capitalize text-gray-300">${s}</span><span class="font-mono text-gray-400">${c}</span></div>`;
+          });
+          genHtml += '</div>';
+        }
+        
+        document.getElementById('plGenerationStatus').innerHTML = genHtml;
+        
+        // --- Review Queue ---
+        const pending = allTasks.filter(t => t.status === 'pending');
+        const approved = allTasks.filter(t => t.status === 'approved');
+        
+        let reviewHtml = `
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="text-center p-3 bg-yellow-900/30 rounded-lg border border-yellow-700/50">
+              <div class="text-2xl font-bold text-yellow-400">${pending.length}</div>
+              <div class="text-xs text-gray-400">Pending Review</div>
+            </div>
+            <div class="text-center p-3 bg-blue-900/30 rounded-lg border border-blue-700/50">
+              <div class="text-2xl font-bold text-blue-400">${approved.length}</div>
+              <div class="text-xs text-gray-400">Approved</div>
+            </div>
+            <div class="text-center p-3 bg-red-900/30 rounded-lg border border-red-700/50">
+              <div class="text-2xl font-bold text-red-400">${failed}</div>
+              <div class="text-xs text-gray-400">Rejected/Failed</div>
+            </div>
+          </div>`;
+        
+        // Show recent pending tasks
+        if (pending.length > 0) {
+          reviewHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2">Awaiting Review</h4>';
+          pending.slice(0, 5).forEach(t => {
+            const pLabel = priorityLabels[t.priority] || '';
+            reviewHtml += `<div class="text-sm py-1.5 border-b border-gray-700/50 flex justify-between items-center">
+              <span class="text-gray-300 truncate mr-2">${t.title}</span>
+              <span class="text-xs whitespace-nowrap">${pLabel}</span>
+            </div>`;
+          });
+          if (pending.length > 5) {
+            reviewHtml += `<div class="text-xs text-gray-500 mt-1">+${pending.length - 5} more pending</div>`;
+          }
+        }
+        
+        document.getElementById('plReviewQueue').innerHTML = reviewHtml;
+        
+        // --- Published Content ---
+        const totalArticles = lc.length + da.length;
+        
+        // Group longevity_content by source
+        const bySource = {};
+        lc.forEach(a => { bySource[a.source || 'unknown'] = (bySource[a.source || 'unknown'] || 0) + 1; });
+        
+        // Group digest articles by topic/source if available
+        const byTopic = {};
+        lc.forEach(a => { if (a.topic) byTopic[a.topic] = (byTopic[a.topic] || 0) + 1; });
+        
+        let pubHtml = `
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="text-center p-3 bg-green-900/30 rounded-lg border border-green-700/50">
+              <div class="text-2xl font-bold text-green-400">${lc.length}</div>
+              <div class="text-xs text-gray-400">Content Items</div>
+            </div>
+            <div class="text-center p-3 bg-purple-900/30 rounded-lg border border-purple-700/50">
+              <div class="text-2xl font-bold text-purple-400">${da.length}</div>
+              <div class="text-xs text-gray-400">Digest Articles</div>
+            </div>
+          </div>`;
+        
+        if (Object.keys(bySource).length > 0) {
+          pubHtml += '<h4 class="text-sm font-medium text-gray-300 mb-2">By Source</h4>';
+          Object.entries(bySource).sort((a, b) => b[1] - a[1]).forEach(([src, count]) => {
+            pubHtml += `<div class="flex justify-between text-sm py-1 border-b border-gray-700/50">
+              <span class="text-gray-300">${src}</span>
+              <span class="text-green-400 font-mono">${count}</span>
+            </div>`;
+          });
+        }
+        
+        // Recent articles
+        const recent = lc.slice(0, 3);
+        if (recent.length > 0) {
+          pubHtml += '<h4 class="text-sm font-medium text-gray-300 mt-3 mb-2">Recent</h4>';
+          recent.forEach(a => {
+            const date = a.captured_at ? new Date(a.captured_at).toLocaleDateString() : '';
+            pubHtml += `<div class="text-sm py-1.5 border-b border-gray-700/50">
+              <div class="text-gray-300 truncate">${a.title || a.content?.substring(0, 60) + '...'}</div>
+              <div class="text-xs text-gray-500">${a.source || ''} · ${date}</div>
+            </div>`;
+          });
+        }
+        
+        document.getElementById('plPublished').innerHTML = pubHtml;
+        
+        // --- Pipeline Health ---
+        const avgCompletionDays = completed > 0 
+          ? allTasks.filter(t => t.completed_at && t.created_at)
+              .map(t => (new Date(t.completed_at) - new Date(t.created_at)) / (1000 * 60 * 60 * 24))
+              .reduce((sum, d, _, arr) => sum + d / arr.length, 0).toFixed(1)
+          : 'N/A';
+        
+        const throughputWeek = allTasks.filter(t => {
+          if (!t.completed_at) return false;
+          const d = new Date(t.completed_at);
+          return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+        }).length;
+        
+        document.getElementById('plHealth').innerHTML = `
+          <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+            <div class="text-3xl font-bold text-emerald-400">${successRate}</div>
+            <div class="text-sm text-gray-400 mt-1">Success Rate</div>
+            <div class="text-xs text-gray-500">${completed} completed / ${completed + failed} resolved</div>
+          </div>
+          <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+            <div class="text-3xl font-bold text-blue-400">${avgCompletionDays}</div>
+            <div class="text-sm text-gray-400 mt-1">Avg Days to Complete</div>
+            <div class="text-xs text-gray-500">From creation to completion</div>
+          </div>
+          <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+            <div class="text-3xl font-bold text-purple-400">${throughputWeek}</div>
+            <div class="text-sm text-gray-400 mt-1">Completed This Week</div>
+            <div class="text-xs text-gray-500">Last 7 days throughput</div>
+          </div>
+        `;
+        
+        // --- Recent Pipeline Tasks ---
+        const recentTasks = allTasks
+          .filter(t => t.category === 'pipeline')
+          .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+          .slice(0, 10);
+        
+        if (recentTasks.length === 0) {
+          // Show all recent tasks if no pipeline-specific ones
+          const recent = allTasks
+            .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+            .slice(0, 10);
+          recentTasks.push(...recent);
+        }
+        
+        const statusIcons = {
+          pending: '⏳', approved: '✅', running: '🔄', completed: '✅', complete: '✅',
+          failed: '❌', planning: '📋'
+        };
+        const statusTextColors = {
+          pending: 'text-yellow-400', approved: 'text-blue-400', running: 'text-cyan-400',
+          completed: 'text-green-400', complete: 'text-green-400', failed: 'text-red-400', planning: 'text-purple-400'
+        };
+        
+        let tasksHtml = '';
+        recentTasks.forEach(t => {
+          const icon = statusIcons[t.status] || '❓';
+          const color = statusTextColors[t.status] || 'text-gray-400';
+          const date = t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '';
+          tasksHtml += `<div class="flex items-center justify-between py-2 border-b border-gray-700/50 hover:bg-gray-700/30 px-2 rounded">
+            <div class="flex items-center gap-2 min-w-0">
+              <span>${icon}</span>
+              <span class="text-sm text-gray-300 truncate">${t.title}</span>
+            </div>
+            <div class="flex items-center gap-3 flex-shrink-0">
+              <span class="text-xs ${color} capitalize">${t.status}</span>
+              <span class="text-xs text-gray-500">${date}</span>
+            </div>
+          </div>`;
+        });
+        
+        document.getElementById('plRecentTasks').innerHTML = tasksHtml || '<div class="text-gray-400 text-sm">No pipeline tasks found</div>';
+        
+      } catch (err) {
+        console.error('[Pipeline] Error:', err);
+        document.getElementById('plQueueOverview').innerHTML = `<div class="text-red-400 text-sm">Error loading: ${err.message}</div>`;
+      }
+    }
+    
+    window.loadPipeline = loadPipeline;
+
     // Expose for button and debugging
     window.refreshAll = refreshAll;
     window.dashboardInit = init;
