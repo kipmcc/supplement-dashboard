@@ -677,6 +677,151 @@
 
     // ==================== TASK QUEUE FUNCTIONS ====================
     
+    // ==================== ONGOING TASKS (Background Processes) ====================
+    
+    // Load ongoing tasks
+    async function loadOngoingTasks() {
+      try {
+        const { data: tasks, error } = await supabase
+          .from('ongoing_tasks')
+          .select('*')
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        renderOngoingTasks(tasks || []);
+      } catch (error) {
+        console.error('Error loading ongoing tasks:', error);
+      }
+    }
+    
+    // Render ongoing tasks UI
+    function renderOngoingTasks(tasks) {
+      const container = document.getElementById('ongoingTasksContainer');
+      if (!container) return;
+      
+      if (tasks.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm">No ongoing tasks configured.</div>';
+        return;
+      }
+      
+      const statusColors = {
+        running: { bg: 'green', text: 'green', icon: '▶️' },
+        paused: { bg: 'yellow', text: 'yellow', icon: '⏸️' },
+        stopped: { bg: 'gray', text: 'gray', icon: '⏹️' }
+      };
+      
+      let html = '';
+      
+      for (const task of tasks) {
+        const status = statusColors[task.status] || statusColors.stopped;
+        const progressPct = task.progress_total ? Math.round((task.progress_current / task.progress_total) * 100) : 0;
+        const lastHeartbeat = task.last_heartbeat ? new Date(task.last_heartbeat).toLocaleTimeString() : 'Never';
+        
+        html += `
+          <div class="bg-gray-800 rounded-lg p-4 border border-${status.bg}-500/50">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">${status.icon}</span>
+                <span class="font-medium text-white">${task.title}</span>
+                <span class="px-2 py-0.5 rounded text-xs bg-${status.bg}-600/30 text-${status.text}-400">${task.status}</span>
+              </div>
+              <div class="flex gap-2">
+                ${task.status === 'running' ? `
+                  <button onclick="controlOngoingTask('${task.task_key}', 'pause')" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium">
+                    ⏸️ Pause
+                  </button>
+                ` : ''}
+                ${task.status === 'paused' ? `
+                  <button onclick="controlOngoingTask('${task.task_key}', 'resume')" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">
+                    ▶️ Resume
+                  </button>
+                ` : ''}
+                ${task.status === 'stopped' ? `
+                  <button onclick="controlOngoingTask('${task.task_key}', 'start')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium">
+                    ▶️ Start
+                  </button>
+                ` : ''}
+                ${task.status !== 'stopped' ? `
+                  <button onclick="controlOngoingTask('${task.task_key}', 'stop')" class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium">
+                    ⏹️ Stop
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+            <div class="text-sm text-gray-400 mb-2">${task.description || ''}</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <span class="text-gray-500">Progress:</span>
+                <span class="text-white ml-1">${task.progress_current || 0}${task.progress_total ? '/' + task.progress_total : ''}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Success:</span>
+                <span class="text-green-400 ml-1">${task.success_count || 0}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Failures:</span>
+                <span class="text-red-400 ml-1">${task.failure_count || 0}</span>
+              </div>
+              <div>
+                <span class="text-gray-500">Last Update:</span>
+                <span class="text-white ml-1">${lastHeartbeat}</span>
+              </div>
+            </div>
+            ${task.status === 'running' && task.progress_total ? `
+              <div class="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full bg-green-500 transition-all" style="width: ${progressPct}%"></div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+      
+      container.innerHTML = html;
+    }
+    
+    // Control ongoing task (start/stop/pause/resume)
+    async function controlOngoingTask(taskKey, action) {
+      // This calls an API endpoint or updates the database
+      // The actual process control happens server-side or via Jeff
+      try {
+        const updates = { updated_at: new Date().toISOString() };
+        
+        if (action === 'pause') {
+          updates.status = 'paused';
+          updates.paused_at = new Date().toISOString();
+        } else if (action === 'resume' || action === 'start') {
+          updates.status = 'running';
+          updates.paused_at = null;
+        } else if (action === 'stop') {
+          updates.status = 'stopped';
+          updates.pid = null;
+        }
+        
+        const { error } = await supabase
+          .from('ongoing_tasks')
+          .update(updates)
+          .eq('task_key', taskKey);
+        
+        if (error) throw error;
+        
+        // Show feedback
+        alert(`Task ${action} requested. Jeff will handle the process control.`);
+        
+        // Refresh the list
+        await loadOngoingTasks();
+        
+      } catch (error) {
+        console.error('Error controlling ongoing task:', error);
+        alert('Failed to update task: ' + error.message);
+      }
+    }
+    
+    // Expose to window
+    window.loadOngoingTasks = loadOngoingTasks;
+    window.controlOngoingTask = controlOngoingTask;
+    
+    // ==================== END ONGOING TASKS ====================
+    
     // Load tasks from database
     async function loadTaskQueue() {
       try {

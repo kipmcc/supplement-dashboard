@@ -100,8 +100,9 @@
       document.getElementById('content-' + tabName).classList.add('active');
       
       // Load data when switching tabs
-      if (tabName === 'tasks' && window.loadTaskQueue) {
-        window.loadTaskQueue();
+      if (tabName === 'tasks') {
+        if (window.loadOngoingTasks) window.loadOngoingTasks();
+        if (window.loadTaskQueue) window.loadTaskQueue();
       }
       if (tabName === 'projects' && window.loadProjects) {
         window.loadProjects();
@@ -536,6 +537,17 @@
           Jeff will execute approved tasks and update status here.
           Approved tasks will show as "Running" when in progress.
         </p>
+      </div>
+
+      <!-- Ongoing Tasks (Background Processes) -->
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+          🔄 Ongoing Tasks
+          <span class="text-xs font-normal text-gray-400">(Background Processes)</span>
+        </h3>
+        <div id="ongoingTasksContainer" class="space-y-3">
+          <div class="text-gray-400 text-sm">Loading ongoing tasks...</div>
+        </div>
       </div>
 
       <!-- Task Filter Tabs -->
