@@ -76,6 +76,9 @@
         <button onclick="switchTab('mobile')" id="tab-mobile" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           📱 Mobile MVP
         </button>
+        <button onclick="switchTab('content')" id="tab-content" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          📝 Content
+        </button>
       </div>
     </div>
   </header>
@@ -105,6 +108,9 @@
       }
       if (tabName === 'mobile' && window.loadMobileMVP) {
         window.loadMobileMVP();
+      }
+      if (tabName === 'content' && window.loadContentPipeline) {
+        window.loadContentPipeline();
       }
     }
   </script>
@@ -603,6 +609,69 @@
         </div>
       </section>
     </div><!-- End Mobile MVP Tab -->
+
+    <!-- ==================== CONTENT PIPELINE TAB ==================== -->
+    <div id="content-content" class="tab-content">
+      <section>
+        <h2 class="text-xl font-semibold mb-6 flex items-center">
+          <span class="mr-2">📝</span> Content Pipeline
+        </h2>
+
+        <!-- Pipeline Summary -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-gray-400 text-sm">Queue Total</div>
+            <div id="contentQueueTotal" class="text-3xl font-bold text-white">--</div>
+          </div>
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-gray-400 text-sm">Draft</div>
+            <div id="contentDraft" class="text-3xl font-bold text-yellow-400">--</div>
+          </div>
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-gray-400 text-sm">Scheduled</div>
+            <div id="contentScheduled" class="text-3xl font-bold text-blue-400">--</div>
+          </div>
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-gray-400 text-sm">Published</div>
+            <div id="contentPublished" class="text-3xl font-bold text-green-400">--</div>
+          </div>
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="text-gray-400 text-sm">Failed</div>
+            <div id="contentFailed" class="text-3xl font-bold text-red-400">--</div>
+          </div>
+        </div>
+
+        <!-- Review Queue -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+          <h3 class="text-lg font-semibold mb-4 text-purple-400">⏳ Pending Review</h3>
+          <div id="contentReviewQueue" class="space-y-2">
+            <div class="text-gray-400">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Recent Published -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+          <h3 class="text-lg font-semibold mb-4 text-green-400">✅ Recently Published</h3>
+          <div id="contentRecentPublished" class="space-y-2">
+            <div class="text-gray-400">Loading...</div>
+          </div>
+        </div>
+
+        <!-- Published Articles -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <h3 class="text-lg font-semibold mb-4 text-cyan-400">📰 Published Articles</h3>
+          <div id="contentPublishedArticles" class="space-y-2">
+            <div class="text-gray-400">Loading...</div>
+          </div>
+        </div>
+
+        <div class="mt-6 text-center">
+          <button onclick="loadContentPipeline()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+            🔄 Refresh Content Pipeline
+          </button>
+        </div>
+      </section>
+    </div><!-- End Content Pipeline Tab -->
 
   </main>
 

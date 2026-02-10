@@ -1213,10 +1213,87 @@
       renderMVPItems();
     }
     
+    // ==================== CONTENT PIPELINE ====================
+    
+    async function loadContentPipeline() {
+      try {
+        // Load content queue stats
+        const { data: queue, error: qError } = await supabase
+          .from('content_queue')
+          .select('status, content_type, platform, title, published_at, requires_approval, approved_at');
+        
+        if (qError) throw qError;
+        
+        // Calculate stats
+        const stats = {
+          total: queue?.length || 0,
+          draft: queue?.filter(q => q.status === 'draft').length || 0,
+          scheduled: queue?.filter(q => q.status === 'scheduled').length || 0,
+          published: queue?.filter(q => q.status === 'published').length || 0,
+          failed: queue?.filter(q => q.status === 'failed').length || 0
+        };
+        
+        // Update summary cards
+        document.getElementById('contentQueueTotal').textContent = stats.total;
+        document.getElementById('contentDraft').textContent = stats.draft;
+        document.getElementById('contentScheduled').textContent = stats.scheduled;
+        document.getElementById('contentPublished').textContent = stats.published;
+        document.getElementById('contentFailed').textContent = stats.failed;
+        
+        // Pending review items
+        const pendingReview = queue?.filter(q => q.requires_approval && !q.approved_at) || [];
+        const reviewHtml = pendingReview.length > 0 
+          ? pendingReview.slice(0, 5).map(item => `
+              <div class="p-2 bg-gray-700/30 rounded flex justify-between items-center">
+                <span class="text-gray-300">${item.title || 'Untitled'}</span>
+                <span class="text-xs text-purple-400">${item.platform}</span>
+              </div>
+            `).join('')
+          : '<div class="text-gray-500">No items pending review</div>';
+        document.getElementById('contentReviewQueue').innerHTML = reviewHtml;
+        
+        // Recent published
+        const recentPublished = queue?.filter(q => q.status === 'published')
+          .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))
+          .slice(0, 5) || [];
+        const publishedHtml = recentPublished.length > 0
+          ? recentPublished.map(item => `
+              <div class="p-2 bg-gray-700/30 rounded flex justify-between items-center">
+                <span class="text-gray-300">${item.title || 'Untitled'}</span>
+                <span class="text-xs text-green-400">${item.platform} • ${new Date(item.published_at).toLocaleDateString()}</span>
+              </div>
+            `).join('')
+          : '<div class="text-gray-500">No published content yet</div>';
+        document.getElementById('contentRecentPublished').innerHTML = publishedHtml;
+        
+        // Load published articles from public_articles
+        const { data: articles, error: aError } = await supabase
+          .from('public_articles')
+          .select('title, slug, category, published_at, is_current')
+          .eq('is_current', true)
+          .order('published_at', { ascending: false })
+          .limit(10);
+        
+        const articlesHtml = articles?.length > 0
+          ? articles.map(a => `
+              <div class="p-2 bg-gray-700/30 rounded flex justify-between items-center">
+                <span class="text-gray-300">${a.title}</span>
+                <span class="text-xs text-cyan-400">${a.category || 'uncategorized'}</span>
+              </div>
+            `).join('')
+          : '<div class="text-gray-500">No published articles yet</div>';
+        document.getElementById('contentPublishedArticles').innerHTML = articlesHtml;
+        
+      } catch (error) {
+        console.error('Error loading content pipeline:', error);
+      }
+    }
+    
     // Expose MVP functions globally
     window.loadMobileMVP = loadMobileMVP;
     window.toggleMVPStatus = toggleMVPStatus;
     window.filterMVP = filterMVP;
+    window.loadContentPipeline = loadContentPipeline;
     
     // Expose task functions globally
     window.approveTask = approveTask;
