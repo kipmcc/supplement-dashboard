@@ -98,10 +98,12 @@ function centerOnContent(text) {
   const vpW = window.innerWidth - sidebarW;
   const vpH = window.innerHeight;
 
-  // Pixel offset = default center + (content grid center * char size) - (viewport / 2)
-  // This positions the content center in the middle of the viewport
-  const offsetX = defaultX + (centerCol * CHAR_H) - (vpW / 2);
-  const offsetY = defaultY + (centerRow * CHAR_V) - (vpH / 2);
+  // Content at grid (0,0) renders at pixel (0,0) + translate(vpW/2, vpH/2).
+  // To center the content's midpoint in the viewport:
+  // screen_x = vpW/2 + centerCol*CHAR_H - offset.x = vpW/2  =>  offset.x = centerCol*CHAR_H
+  // But we also need to account for the sidebar (~380px) shifting the visible area right.
+  const offsetX = centerCol * CHAR_H - sidebarW / 2;
+  const offsetY = centerRow * CHAR_V;
 
   canvas.setOffset({x: Math.max(0, offsetX), y: Math.max(0, offsetY)});
   canvas.setZoom(1);
