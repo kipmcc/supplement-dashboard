@@ -77,7 +77,12 @@ function asciiToUnicode(text) {
     for (let c = 0; c < maxW; c++) {
       const ch = grid[r][c];
       if (ch === '-') {
-        result[r][c] = '─';
+        // Only convert '-' to '─' if it's part of a horizontal line
+        // (adjacent to another '-', '+', or box-drawing char)
+        const leftCh = at(r,c-1);
+        const rightCh = at(r,c+1);
+        const isLine = isH(leftCh) || isH(rightCh) || isJunction(leftCh) || isJunction(rightCh);
+        if (isLine) result[r][c] = '─';
       } else if (ch === '|') {
         result[r][c] = '│';
       } else if (ch === '+') {
