@@ -79,13 +79,41 @@ async function listVersions(diagramId) {
   return res.json();
 }
 
-// ===================== Canvas =====================
+// ===================== Canvas (ASCIIFlow Internal Format) =====================
+// ASCIIFlow stores layers as: base64(pako.deflate(JSON({name, layer: JSON({version:2, x, y, text})})))
+
+function asciiToStorageFormat(asciiText, drawingName) {
+  // Build the layer JSON
+  const layerJson = JSON.stringify({ version: 2, x: 0, y: 0, text: asciiText });
+  // Build the drawing JSON
+  const drawingJson = JSON.stringify({ name: drawingName || 'default', layer: layerJson });
+  // Compress and base64 encode
+  const jsonBytes = new TextEncoder().encode(drawingJson);
+  const deflated = pako.deflate(jsonBytes);
+  return Base64.fromUint8Array(deflated);
+}
+
+function storageToAscii(storageValue) {
+  try {
+    const deflated = Base64.toUint8Array(storageValue);
+    const jsonBytes = pako.inflate(deflated);
+    const jsonString = new TextDecoder('utf8').decode(jsonBytes);
+    const drawing = JSON.parse(jsonString);
+    const layer = JSON.parse(drawing.layer);
+    return layer.text || '';
+  } catch {
+    // Might be raw text (old format)
+    return storageValue;
+  }
+}
 
 function getCurrentDrawingText() {
   const keys = Object.keys(localStorage).filter(k => k.startsWith('drawing/'));
   const committedKey = keys.find(k => k.includes('committed-layer'));
   if (!committedKey) return '';
-  return localStorage.getItem(committedKey) || '';
+  const raw = localStorage.getItem(committedKey) || '';
+  // Return as ASCII text for cloud storage
+  return storageToAscii(raw);
 }
 
 function getCurrentDrawingName() {
@@ -95,10 +123,13 @@ function getCurrentDrawingName() {
   return 'default';
 }
 
-function setCanvasContent(content) {
+function setCanvasContent(asciiText) {
   const drawingName = getCurrentDrawingName();
-  const prefix = `drawing/${encodeURIComponent(`local/${encodeURIComponent(drawingName)}`)}`;
-  localStorage.setItem(`${prefix}/committed-layer`, content);
+  const storageKey = `drawing/${encodeURIComponent(`local/${encodeURIComponent(drawingName)}`)}/committed-layer`;
+  const encoded = asciiToStorageFormat(asciiText, drawingName);
+  localStorage.setItem(storageKey, encoded);
+  // Clear undo/redo
+  const prefix = storageKey.replace('/committed-layer', '');
   localStorage.setItem(`${prefix}/undo-layers`, '[]');
   localStorage.setItem(`${prefix}/redo-layers`, '[]');
 }
@@ -149,6 +180,8 @@ function injectIntoSidebar() {
         }
       }
       createSidebarSection(sidebar);
+      // Hide native File section and Help section
+      hideNativeSections(sidebar);
     }
   }, 500);
 
@@ -314,6 +347,11 @@ function createSidebarSection(sidebar) {
         <button class="af-btn" onclick="window._af.saveNew()">➕ New</button>
         <button class="af-btn" onclick="window._af.copyMd()">📋 Copy</button>
       </div>
+    </div>
+    <div style="padding:8px 16px;font-size:10px;color:#9ca3af;border-top:1px solid #e5e7eb;line-height:1.6;">
+      <strong style="color:#6b7280;">Keys:</strong>
+      ⌘Z undo · ⌘⇧Z redo · Space+drag pan · Alt shortcuts ·
+      B box · V select · D freeform · A arrow · L line · T text
     </div>
   `;
 
@@ -551,6 +589,55 @@ setInterval(() => {
     }).catch(() => {});
   }
 }, 30000);
+
+// ===================== Hide Native Sections =====================
+
+function hideNativeSections(sidebar) {
+  const muiList = sidebar.querySelector('ul.MuiList-root, ul[class*="MuiList"]');
+  if (!muiList) return;
+  
+  const items = Array.from(muiList.children);
+  let hideMode = null;
+  
+  for (const item of items) {
+    const text = (item.textContent || '').trim();
+    
+    // Hide "File" header and its children (Default drawing, etc.)
+    if (text === 'File' || text.startsWith('File')) {
+      item.style.display = 'none';
+      hideMode = 'file';
+      continue;
+    }
+    if (hideMode === 'file') {
+      // Hide file entries until we hit Edit or Cloud
+      if (text.startsWith('Edit') || item.querySelector('#aviflow-cloud')) {
+        hideMode = null;
+      } else {
+        item.style.display = 'none';
+        continue;
+      }
+    }
+    
+    // Hide "Help" header and help text below it
+    if (text === 'Help' || text.startsWith('Help')) {
+      item.style.display = 'none';
+      hideMode = 'help';
+      continue;
+    }
+    if (hideMode === 'help') {
+      item.style.display = 'none';
+      continue;
+    }
+  }
+  
+  // Also hide the help text div that's a direct child of the sidebar (not in the list)
+  for (const child of sidebar.children) {
+    const text = (child.textContent || '').trim();
+    if (text.startsWith('Draw boxes by dragging') || text.includes('cmd + z')) {
+      child.style.display = 'none';
+    }
+  }
+}
 
 // ===================== Init =====================
 
