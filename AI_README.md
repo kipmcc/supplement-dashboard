@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 06:30 CST by Jeff*
+*Last updated: 2026-02-10 06:40 CST by Maureen*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -23,6 +23,7 @@
 | **Tasks** | Granular task queue + ongoing processes | `task_queue`, `ongoing_tasks` |
 | **Mobile** | Mobile app MVP tracking | (static) |
 | **Content** | Research articles pipeline | `longevity_content`, `public_articles` |
+| **Diagrams** | ASCIIFlow editor — architecture, flows, specs | localStorage (Supabase planned) |
 
 ### Tasks Tab — Sub-Tabs
 The Tasks tab has four filter views:
@@ -165,14 +166,17 @@ pending → approved → running → complete
 | `rejected` | Won't do | Kip |
 
 ### Auto-Execution Rules
-- AI checks `status = 'approved'` every 5 minutes
+- **Jeff** checks `status = 'approved'` every 5 minutes
+- **Maureen** checks every hour (cron job)
+- **Approved = GO.** Start immediately, own through completion. Sequential by priority.
 - On pickup: set `status = 'running'`, `started_at = NOW()`
 - On finish: set `status = 'complete'`, `completed_at = NOW()`, fill `result_summary`
 - On error: set `status = 'failed'`, fill `error_message`
 
 ### Task Ownership
-- `owner = 'jeff'` → AI-executed tasks
-- `owner = 'maureen'` → Human-executed tasks
+- `owner = 'jeff'` → CTO tasks (infrastructure, scraping, database)
+- `owner = 'maureen'` → CMO tasks (content, social, marketing, Outpost)
+- `owner = 'kip'` → Tasks requiring Kip's direct action
 
 ### Creating Tasks (SQL)
 ```sql
@@ -304,6 +308,34 @@ Finds and downloads verified product images from multiple sources.
 ### Quota Limits
 - **Google CSE:** 100 queries/day (resets midnight PT)
 - **Vision API:** 1000 requests/month
+
+---
+
+## ✏️ Diagrams Tab (ASCIIFlow)
+
+**Added:** 2026-02-10 by Maureen
+
+Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collaboration.
+
+### Files
+- `asciiflow/` — Built bundle + assets (served statically via iframe)
+- `asciiflow-src/` — Full TypeScript source for modifications
+- Build: `cd asciiflow-src && npm install && npx webpack --config webpack.prod.config.cjs`
+- Copy output: `cp dist/* ../asciiflow/`
+
+### Features
+- Fullscreen mode button
+- Currently uses localStorage for persistence (browser-local)
+- **Planned:** Supabase persistence, project-linked diagrams, version history, AI how-to page
+
+### Rebuilding After Source Changes
+```bash
+cd asciiflow-src
+npm install           # first time only
+npx webpack --config webpack.prod.config.cjs
+cp dist/asciiflow.bundle.js ../asciiflow/
+cp dist/index.html ../asciiflow/
+```
 
 ---
 
