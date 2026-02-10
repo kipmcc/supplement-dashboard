@@ -56,15 +56,55 @@ async function apiDelete(id) {
 function loadToCanvas(text) {
   if (window.__aviflow_api) {
     window.__aviflow_api.loadText(text);
-    // Reset viewport to show content at origin
-    if (window.__aviflow_store && window.__aviflow_store.currentCanvas) {
-      window.__aviflow_store.currentCanvas.setOffset({x: 0, y: 0});
-      window.__aviflow_store.currentCanvas.setZoom(1);
-    }
+    centerOnContent(text);
     return true;
   }
   console.error('AviFlow API not available — ASCIIFlow bundle may not be modified');
   return false;
+}
+
+/**
+ * Center the viewport on the loaded content.
+ * ASCIIFlow grid: 2000×600 chars. Content loaded at grid origin (0,0) maps to
+ * pixel center (MAX_GRID_WIDTH/2 * CHAR_H, MAX_GRID_HEIGHT/2 * CHAR_V).
+ * We compute the content's center in grid coords, then convert to pixel offset.
+ */
+function centerOnContent(text) {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  const CHAR_H = 9, CHAR_V = 16;
+  const GRID_W = 2000, GRID_H = 600;
+  // Default center offset (what ASCIIFlow uses for empty canvas)
+  const defaultX = (GRID_W * CHAR_H) / 2;
+  const defaultY = (GRID_H * CHAR_V) / 2;
+
+  if (!text || !text.trim()) {
+    canvas.setOffset({x: defaultX, y: defaultY});
+    canvas.setZoom(1);
+    return;
+  }
+  // Compute content bounds from text lines
+  const lines = text.split('\n');
+  let maxCol = 0;
+  let rowCount = lines.length;
+  for (const line of lines) if (line.length > maxCol) maxCol = line.length;
+
+  // Content center in grid coordinates (relative to origin 0,0)
+  const centerCol = maxCol / 2;
+  const centerRow = rowCount / 2;
+
+  // Get the viewport size in pixels (approximate from window)
+  const sidebarW = 360; // approximate sidebar width
+  const vpW = window.innerWidth - sidebarW;
+  const vpH = window.innerHeight;
+
+  // Pixel offset = default center + (content grid center * char size) - (viewport / 2)
+  // This positions the content center in the middle of the viewport
+  const offsetX = defaultX + (centerCol * CHAR_H) - (vpW / 2);
+  const offsetY = defaultY + (centerRow * CHAR_V) - (vpH / 2);
+
+  canvas.setOffset({x: Math.max(0, offsetX), y: Math.max(0, offsetY)});
+  canvas.setZoom(1);
 }
 
 function readFromCanvas() {
