@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 06:05 CST by Jeff*
+*Last updated: 2026-02-10 06:24 CST by Jeff*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -20,9 +20,19 @@
 |-----|---------|------------|
 | **Dashboard** | DB stats, gap tracking, metrics | `canonical_products`, `metrics_history` |
 | **Projects** | High-level project tracking | `projects` |
-| **Tasks** | Granular task queue | `task_queue` |
+| **Tasks** | Granular task queue + ongoing processes | `task_queue`, `ongoing_tasks` |
 | **Mobile** | Mobile app MVP tracking | (static) |
 | **Content** | Research articles pipeline | `longevity_content`, `public_articles` |
+
+### Tasks Tab — Sub-Tabs
+The Tasks tab has four filter views:
+
+| Sub-Tab | Shows | Use For |
+|---------|-------|---------|
+| **📋 Open Tasks** | pending, approved, running, planning, research | Active work items |
+| **✅ Completed** | complete, completed | Finished tasks |
+| **🔄 Ongoing** | Background processes (Image Hunter, etc.) | Pause/resume long-running jobs |
+| **📑 All** | Everything | Full view |
 
 ---
 
@@ -248,14 +258,50 @@ psql "postgresql://postgres.xijsvdhffiuxpepswnyb:Bk8iL2uStsSNTswM@aws-0-us-west-
 
 ---
 
-## 📝 Updating This Document
+## 📝 Change Management — EVERYONE READ THIS
 
-When protocols change:
-1. Update this file
-2. Update `updated_at` timestamp at top
-3. Commit to repo: `cd supplement-dashboard && git add AI_README.md && git commit -m "Update AI ops manual" && git push`
+**This file is the single source of truth.** When anyone (human or AI) changes the dashboard, this file MUST be updated.
 
-This is a living document. Keep it current.
+### When to Update This File
+
+| Change Type | Action Required |
+|-------------|-----------------|
+| New tab added | Add to "Dashboard Structure" section |
+| New table created | Add to "Key Database Tables" section |
+| Task workflow changed | Update "Task Management Protocol" section |
+| New ongoing task type | Add to "Ongoing Tasks" section |
+| New API/connection | Add to "Connection Details" section |
+| UI button/feature added | Document in relevant section |
+| Protocol changed | Update the relevant protocol section |
+
+### How to Update
+
+1. **Edit this file** with your changes
+2. **Update the timestamp** at the top: `*Last updated: YYYY-MM-DD HH:MM CST by [Name]*`
+3. **Commit with your code changes:**
+   ```bash
+   cd supplement-dashboard
+   git add -A
+   git commit -m "Your feature + update AI_README"
+   git push
+   ```
+4. **Deploy if needed:** `npx vercel --prod`
+
+### Why This Matters
+
+- **Jeff (AI)** reads this file to understand how to operate the dashboard
+- **Future AI agents** will rely on this for onboarding
+- **Humans** can reference this instead of asking questions
+- **No more email chains** explaining how things work
+
+### What Happens If You Don't Update
+
+- AI agents will have outdated understanding
+- Features won't be used correctly
+- Protocols drift apart
+- Someone has to email instructions (defeats the purpose)
+
+**Rule: If you touch the dashboard, touch this file.**
 
 ---
 
