@@ -22,7 +22,7 @@
       "use": "@vercel/static"
     },
     {
-      "src": "asciiflow/*",
+      "src": "*.svg",
       "use": "@vercel/static"
     }
   ],
