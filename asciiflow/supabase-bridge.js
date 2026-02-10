@@ -119,7 +119,7 @@ function getCurrentDrawingName() {
   const hash = window.location.hash;
   const match = hash.match(/\/local\/([^/]+)/);
   if (match) return decodeURIComponent(match[1]);
-  return 'default';
+  return 'null'; // ASCIIFlow uses DrawingId.local(null) for the default drawing → "null"
 }
 
 function setCanvasContent(asciiText) {
