@@ -51,10 +51,68 @@ async function apiDelete(id) {
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
+// ===================== ASCII → Unicode Converter =====================
+
+/**
+ * Convert ASCII box-drawing characters (+, -, |) to ASCIIFlow's native Unicode
+ * box-drawing characters (┌┐└┘─│├┤┬┴┼) with smart corner/junction detection.
+ */
+function asciiToUnicode(text) {
+  const lines = text.split('\n');
+  const grid = lines.map(l => [...l]);
+  const maxW = Math.max(...grid.map(r => r.length));
+  // Pad all rows to same width
+  grid.forEach(r => { while (r.length < maxW) r.push(' '); });
+  const H = grid.length;
+
+  function at(r,c) { return (r>=0 && r<H && c>=0 && c<maxW) ? grid[r][c] : ' '; }
+  function isH(ch) { return ch === '-' || ch === '─'; }
+  function isV(ch) { return ch === '|' || ch === '│'; }
+  function isJunction(ch) { return ch === '+' || '┌┐└┘├┤┬┴┼'.includes(ch); }
+  function isStructural(ch) { return isH(ch) || isV(ch) || isJunction(ch); }
+
+  const result = grid.map(r => [...r]);
+
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < maxW; c++) {
+      const ch = grid[r][c];
+      if (ch === '-') {
+        result[r][c] = '─';
+      } else if (ch === '|') {
+        result[r][c] = '│';
+      } else if (ch === '+') {
+        // Detect connections in 4 directions
+        const up = isV(at(r-1,c)) || isJunction(at(r-1,c));
+        const down = isV(at(r+1,c)) || isJunction(at(r+1,c));
+        const left = isH(at(r,c-1)) || isJunction(at(r,c-1));
+        const right = isH(at(r,c+1)) || isJunction(at(r,c+1));
+
+        if (down && right && !up && !left) result[r][c] = '┌';
+        else if (down && left && !up && !right) result[r][c] = '┐';
+        else if (up && right && !down && !left) result[r][c] = '└';
+        else if (up && left && !down && !right) result[r][c] = '┘';
+        else if (up && down && right && !left) result[r][c] = '├';
+        else if (up && down && left && !right) result[r][c] = '┤';
+        else if (down && left && right && !up) result[r][c] = '┬';
+        else if (up && left && right && !down) result[r][c] = '┴';
+        else if (up && down && left && right) result[r][c] = '┼';
+        else if (left && right) result[r][c] = '─';
+        else if (up && down) result[r][c] = '│';
+        else result[r][c] = '+'; // keep as-is if ambiguous
+      }
+    }
+  }
+  return result.map(r => r.join('')).join('\n');
+}
+
 // ===================== Canvas API (via modified ASCIIFlow) =====================
 
 function loadToCanvas(text) {
   if (window.__aviflow_api) {
+    // Auto-convert ASCII box chars to Unicode if needed
+    if (text.includes('+--') || text.includes('-+-')) {
+      text = asciiToUnicode(text);
+    }
     window.__aviflow_api.loadText(text);
     centerOnContent(text);
     return true;
@@ -65,45 +123,41 @@ function loadToCanvas(text) {
 
 /**
  * Center the viewport on the loaded content.
- * ASCIIFlow grid: 2000×600 chars. Content loaded at grid origin (0,0) maps to
- * pixel center (MAX_GRID_WIDTH/2 * CHAR_H, MAX_GRID_HEIGHT/2 * CHAR_V).
- * We compute the content's center in grid coords, then convert to pixel offset.
+ * In ASCIIFlow's coordinate system:
+ * - Grid cell (gx,gy) draws at pixel (gx*CHAR_H - offset.x, gy*CHAR_V - offset.y)
+ *   PLUS a translate of (canvasWidth/2, canvasHeight/2).
+ * - The sidebar overlays the left ~380px of the canvas.
+ * - To center content in the VISIBLE area (right of sidebar), we set offset so that
+ *   the content midpoint lands at the center of the visible region.
  */
 function centerOnContent(text) {
   const canvas = window.__aviflow_store?.currentCanvas;
   if (!canvas) return;
   const CHAR_H = 9, CHAR_V = 16;
-  const GRID_W = 2000, GRID_H = 600;
-  // Default center offset (what ASCIIFlow uses for empty canvas)
-  const defaultX = (GRID_W * CHAR_H) / 2;
-  const defaultY = (GRID_H * CHAR_V) / 2;
 
   if (!text || !text.trim()) {
-    canvas.setOffset({x: defaultX, y: defaultY});
     canvas.setZoom(1);
     return;
   }
-  // Compute content bounds from text lines
   const lines = text.split('\n');
   let maxCol = 0;
-  let rowCount = lines.length;
   for (const line of lines) if (line.length > maxCol) maxCol = line.length;
+  const rowCount = lines.length;
 
-  // Content center in grid coordinates (relative to origin 0,0)
-  const centerCol = maxCol / 2;
-  const centerRow = rowCount / 2;
+  // Content center in grid coords
+  const cCol = maxCol / 2;
+  const cRow = rowCount / 2;
 
-  // Get the viewport size in pixels (approximate from window)
-  const sidebarW = 360; // approximate sidebar width
-  const vpW = window.innerWidth - sidebarW;
-  const vpH = window.innerHeight;
-
-  // Content at grid (0,0) renders at pixel (0,0) + translate(vpW/2, vpH/2).
-  // To center the content's midpoint in the viewport:
-  // screen_x = vpW/2 + centerCol*CHAR_H - offset.x = vpW/2  =>  offset.x = centerCol*CHAR_H
-  // But we also need to account for the sidebar (~380px) shifting the visible area right.
-  const offsetX = centerCol * CHAR_H - sidebarW / 2;
-  const offsetY = centerRow * CHAR_V;
+  // The visible area starts after the sidebar
+  // screen_x of cell (gx) = canvasW/2 + gx*CHAR_H - offset.x
+  // We want cell cCol to appear at: sidebarW + (canvasW - sidebarW)/2 = (canvasW + sidebarW)/2
+  // So: (canvasW + sidebarW)/2 = canvasW/2 + cCol*CHAR_H - offset.x
+  // => offset.x = cCol*CHAR_H - sidebarW/2
+  // For Y: we want cRow at canvasH/2
+  // canvasH/2 = canvasH/2 + cRow*CHAR_V - offset.y => offset.y = cRow*CHAR_V
+  const sidebarW = 380;
+  const offsetX = cCol * CHAR_H - sidebarW / 2;
+  const offsetY = cRow * CHAR_V;
 
   canvas.setOffset({x: Math.max(0, offsetX), y: Math.max(0, offsetY)});
   canvas.setZoom(1);
