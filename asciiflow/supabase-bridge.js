@@ -1,6 +1,6 @@
 /**
- * AviFlow — Supabase Bridge
- * Save/load/rename/version/list diagrams backed by Supabase.
+ * AviFlow — Supabase Bridge v2
+ * Injects cloud diagram management directly into the ASCIIFlow left sidebar.
  * Tables: diagrams, diagram_versions
  */
 
@@ -15,7 +15,7 @@ const HEADERS = {
   'Prefer': 'return=representation'
 };
 
-// ===================== API Functions =====================
+// ===================== API =====================
 
 async function listDiagrams(projectFilter) {
   let url = `${API}/diagrams?order=updated_at.desc&limit=100`;
@@ -32,65 +32,46 @@ async function loadDiagram(id) {
 
 async function saveDiagram(id, title, content, projectKey, createdBy, tags) {
   if (id) {
-    // Save version snapshot before updating
     await saveVersion(id, content, createdBy || 'dashboard');
+    const vCount = await getVersionCount(id);
     const res = await fetch(`${API}/diagrams?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: HEADERS,
-      body: JSON.stringify({
-        title, content,
-        project_key: projectKey || null,
-        updated_at: new Date().toISOString(),
-        version_count: await getVersionCount(id) + 1,
-        ...(tags ? { tags } : {})
-      })
+      method: 'PATCH', headers: HEADERS,
+      body: JSON.stringify({ title, content, project_key: projectKey || null,
+        updated_at: new Date().toISOString(), version_count: vCount + 1, ...(tags ? { tags } : {}) })
     });
     return res.json();
   } else {
     const res = await fetch(`${API}/diagrams`, {
-      method: 'POST',
-      headers: HEADERS,
-      body: JSON.stringify({
-        title, content,
-        project_key: projectKey || null,
-        created_by: createdBy || 'dashboard',
-        tags: tags || [],
-        version_count: 1
-      })
+      method: 'POST', headers: HEADERS,
+      body: JSON.stringify({ title, content, project_key: projectKey || null,
+        created_by: createdBy || 'dashboard', tags: tags || [], version_count: 1 })
     });
     return res.json();
   }
 }
 
 async function renameDiagram(id, newTitle) {
-  const res = await fetch(`${API}/diagrams?id=eq.${id}`, {
-    method: 'PATCH',
-    headers: HEADERS,
+  return fetch(`${API}/diagrams?id=eq.${id}`, {
+    method: 'PATCH', headers: HEADERS,
     body: JSON.stringify({ title: newTitle, updated_at: new Date().toISOString() })
-  });
-  return res.json();
+  }).then(r => r.json());
 }
 
 async function deleteDiagram(id) {
-  // Delete versions first
   await fetch(`${API}/diagram_versions?diagram_id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
-// ===================== Version Functions =====================
-
 async function saveVersion(diagramId, content, savedBy) {
   await fetch(`${API}/diagram_versions`, {
-    method: 'POST',
-    headers: HEADERS,
+    method: 'POST', headers: HEADERS,
     body: JSON.stringify({ diagram_id: diagramId, content, saved_by: savedBy || 'dashboard' })
   });
 }
 
 async function getVersionCount(diagramId) {
   const res = await fetch(`${API}/diagram_versions?diagram_id=eq.${diagramId}&select=id`, { headers: HEADERS });
-  const data = await res.json();
-  return data.length;
+  return (await res.json()).length;
 }
 
 async function listVersions(diagramId) {
@@ -98,7 +79,7 @@ async function listVersions(diagramId) {
   return res.json();
 }
 
-// ===================== Canvas Integration =====================
+// ===================== Canvas =====================
 
 function getCurrentDrawingText() {
   const keys = Object.keys(localStorage).filter(k => k.startsWith('drawing/'));
@@ -122,366 +103,249 @@ function setCanvasContent(content) {
   localStorage.setItem(`${prefix}/redo-layers`, '[]');
 }
 
-// ===================== UI State =====================
+// ===================== State =====================
 
 let currentDiagramId = null;
 let currentDiagramTitle = null;
-let panelVisible = false;
-let panelView = 'list'; // 'list' | 'versions'
-let projectFilter = '';
-let autoSaveEnabled = true;
 let lastSavedContent = '';
-let statusTimeout = null;
+let sidebarSection = null;
 
-// ===================== UI Creation =====================
+// ===================== Sidebar Injection =====================
 
-function createPanel() {
-  const panel = document.createElement('div');
-  panel.id = 'aviflow-panel';
-  panel.innerHTML = `
-    <style>
-      #aviflow-panel {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 340px;
-        height: 100vh;
-        background: #111827;
-        color: #e5e7eb;
-        border-left: 2px solid #3b82f6;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 13px;
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+function injectIntoSidebar() {
+  // Find the ASCIIFlow drawer/sidebar — it's the left panel
+  // We poll until the drawer is rendered (React async)
+  const interval = setInterval(() => {
+    // Look for the drawer container — ASCIIFlow uses a div with the tool list
+    const drawer = document.querySelector('[class*="drawer"]') 
+      || document.querySelector('[class*="Drawer"]');
+    
+    // Fallback: find by structure — the sidebar contains "File", "Edit" sections
+    let sidebar = drawer;
+    if (!sidebar) {
+      // Find element containing "File" text that's in a sidebar-like container
+      const allElements = document.querySelectorAll('div');
+      for (const el of allElements) {
+        if (el.offsetWidth > 200 && el.offsetWidth < 500 && el.offsetHeight > 400) {
+          const text = el.textContent || '';
+          if (text.includes('File') && text.includes('Edit') && text.includes('Boxes')) {
+            sidebar = el;
+            break;
+          }
+        }
       }
-      #aviflow-panel.visible { display: flex; }
-      .af-header {
+    }
+
+    if (sidebar) {
+      clearInterval(interval);
+      createSidebarSection(sidebar);
+    }
+  }, 500);
+
+  // Stop trying after 10 seconds
+  setTimeout(() => clearInterval(interval), 10000);
+}
+
+function createSidebarSection(sidebar) {
+  if (sidebarSection) return; // Already injected
+
+  const section = document.createElement('div');
+  section.id = 'aviflow-cloud';
+  section.innerHTML = `
+    <style>
+      #aviflow-cloud {
+        border-top: 2px solid #3b82f6;
+        margin-top: 8px;
         padding: 12px 16px;
-        background: #1f2937;
-        border-bottom: 1px solid #374151;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px;
+        color: #333;
+      }
+      #aviflow-cloud .af-section-title {
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 10px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        color: #1f2937;
       }
-      .af-header-title { font-weight: 700; font-size: 14px; }
-      .af-tabs {
-        display: flex;
-        border-bottom: 1px solid #374151;
-        background: #1f2937;
-      }
-      .af-tab {
-        flex: 1;
-        padding: 8px;
-        text-align: center;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        color: #9ca3af;
+      #aviflow-cloud .af-refresh {
         background: none;
-        border-top: none;
-        border-left: none;
-        border-right: none;
-      }
-      .af-tab:hover { color: #e5e7eb; }
-      .af-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
-      .af-body { flex: 1; overflow-y: auto; padding: 10px; }
-      .af-status {
-        padding: 6px 12px;
-        font-size: 11px;
-        color: #6b7280;
-        border-top: 1px solid #1f2937;
-        text-align: center;
-        min-height: 24px;
-      }
-      .af-status.success { color: #10b981; }
-      .af-status.error { color: #ef4444; }
-      .af-filter {
-        padding: 8px 10px;
-        display: flex;
-        gap: 6px;
-      }
-      .af-filter input, .af-filter select {
-        flex: 1;
-        padding: 5px 8px;
-        background: #0f172a;
-        border: 1px solid #374151;
+        border: 1px solid #d1d5db;
         border-radius: 4px;
-        color: #e5e7eb;
+        cursor: pointer;
         font-size: 12px;
+        padding: 2px 8px;
+        color: #6b7280;
       }
-      .af-item {
-        padding: 10px 12px;
-        margin-bottom: 6px;
-        background: #1f2937;
-        border: 1px solid #374151;
+      #aviflow-cloud .af-refresh:hover { background: #f3f4f6; }
+      #aviflow-cloud .af-diagram-item {
+        padding: 8px 10px;
+        margin-bottom: 4px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
         border-radius: 6px;
         cursor: pointer;
         transition: all 0.15s;
       }
-      .af-item:hover { border-color: #3b82f6; background: #1e293b; }
-      .af-item.active { border-color: #3b82f6; background: #172554; }
-      .af-item-title {
+      #aviflow-cloud .af-diagram-item:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+      }
+      #aviflow-cloud .af-diagram-item.active {
+        border-color: #3b82f6;
+        background: #dbeafe;
+      }
+      #aviflow-cloud .af-diagram-name {
         font-weight: 600;
-        margin-bottom: 3px;
+        font-size: 13px;
+        color: #1f2937;
         display: flex;
         justify-content: space-between;
-        align-items: center;
       }
-      .af-item-meta { font-size: 11px; color: #6b7280; }
-      .af-item-actions {
-        margin-top: 6px;
+      #aviflow-cloud .af-diagram-meta {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 2px;
+      }
+      #aviflow-cloud .af-diagram-actions {
+        margin-top: 4px;
         display: flex;
         gap: 4px;
       }
-      .af-btn {
-        padding: 4px 10px;
-        border-radius: 4px;
-        border: none;
+      #aviflow-cloud .af-btn {
+        padding: 2px 8px;
+        border-radius: 3px;
+        border: 1px solid #d1d5db;
+        background: #fff;
         cursor: pointer;
-        font-size: 11px;
-        font-weight: 500;
-        transition: background 0.15s;
+        font-size: 10px;
+        color: #374151;
       }
-      .af-btn-sm { padding: 2px 8px; font-size: 10px; }
-      .af-btn-primary { background: #3b82f6; color: white; }
-      .af-btn-primary:hover { background: #2563eb; }
-      .af-btn-secondary { background: #374151; color: #e5e7eb; }
-      .af-btn-secondary:hover { background: #4b5563; }
-      .af-btn-danger { background: #7f1d1d; color: #fca5a5; }
-      .af-btn-danger:hover { background: #991b1b; }
-      .af-btn-success { background: #065f46; color: #6ee7b7; }
-      .af-btn-success:hover { background: #047857; }
-      .af-save-section {
-        padding: 10px 12px;
-        border-top: 1px solid #374151;
-        background: #1f2937;
+      #aviflow-cloud .af-btn:hover { background: #f3f4f6; }
+      #aviflow-cloud .af-btn-blue { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+      #aviflow-cloud .af-btn-blue:hover { background: #2563eb; }
+      #aviflow-cloud .af-btn-red { color: #dc2626; border-color: #fca5a5; }
+      #aviflow-cloud .af-btn-red:hover { background: #fef2f2; }
+      #aviflow-cloud .af-save-area {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #e5e7eb;
       }
-      .af-save-section input {
+      #aviflow-cloud .af-save-area input {
         width: 100%;
-        padding: 6px 10px;
-        background: #0f172a;
-        border: 1px solid #374151;
+        padding: 5px 8px;
+        border: 1px solid #d1d5db;
         border-radius: 4px;
-        color: #e5e7eb;
         font-size: 12px;
         margin-bottom: 6px;
         box-sizing: border-box;
+        color: #1f2937;
       }
-      .af-save-buttons {
+      #aviflow-cloud .af-save-buttons {
         display: flex;
-        gap: 6px;
+        gap: 4px;
       }
-      .af-save-buttons .af-btn { flex: 1; padding: 7px 10px; font-size: 12px; }
-      .af-current {
-        padding: 8px 12px;
-        background: #172554;
-        border-bottom: 1px solid #374151;
-        font-size: 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      #aviflow-cloud .af-save-buttons .af-btn { flex: 1; padding: 5px; font-size: 11px; text-align: center; }
+      #aviflow-cloud .af-status-msg {
+        font-size: 11px;
+        padding: 4px 0;
+        text-align: center;
+        min-height: 18px;
       }
-      .af-current-name { font-weight: 600; color: #93c5fd; }
-      .af-version-item {
-        padding: 8px 10px;
-        margin-bottom: 4px;
-        background: #1f2937;
-        border: 1px solid #374151;
+      #aviflow-cloud .af-status-msg.ok { color: #059669; }
+      #aviflow-cloud .af-status-msg.err { color: #dc2626; }
+      #aviflow-cloud .af-empty { color: #9ca3af; text-align: center; padding: 12px; font-size: 12px; }
+      #aviflow-cloud .af-filter {
+        margin-bottom: 8px;
+      }
+      #aviflow-cloud .af-filter input {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 11px;
+        box-sizing: border-box;
+        color: #6b7280;
+      }
+      #aviflow-cloud .af-versions-area {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #e5e7eb;
+      }
+      #aviflow-cloud .af-version-item {
+        padding: 4px 8px;
+        margin-bottom: 3px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
         border-radius: 4px;
         cursor: pointer;
+        font-size: 11px;
       }
-      .af-version-item:hover { border-color: #3b82f6; }
-      .af-version-meta { font-size: 11px; color: #6b7280; }
-      .af-version-preview {
-        font-family: monospace;
-        font-size: 9px;
-        white-space: pre;
-        max-height: 60px;
-        overflow: hidden;
-        color: #6b7280;
-        margin-top: 4px;
-        line-height: 1.1;
-      }
-      #aviflow-toggle {
-        position: fixed;
-        top: 8px;
-        right: 12px;
-        z-index: 10000;
-        padding: 6px 14px;
-        background: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      }
-      #aviflow-toggle:hover { background: #2563eb; }
-      .af-empty {
-        text-align: center;
-        padding: 30px 20px;
-        color: #6b7280;
-        line-height: 1.6;
-      }
+      #aviflow-cloud .af-version-item:hover { border-color: #3b82f6; background: #eff6ff; }
     </style>
 
-    <div class="af-header">
-      <span class="af-header-title">☁️ AviFlow Diagrams</span>
-      <button class="af-btn af-btn-secondary" onclick="togglePanel()" style="padding:2px 8px;">✕</button>
+    <div class="af-section-title">
+      ☁️ Cloud Diagrams
+      <button class="af-refresh" onclick="window._af.refresh()">↻</button>
     </div>
-
-    <div id="af-current-bar" class="af-current" style="display:none;">
-      <span>📄 <span id="af-current-name" class="af-current-name"></span></span>
-      <span style="display:flex;gap:4px;">
-        <button class="af-btn af-btn-sm af-btn-secondary" onclick="handleRename()">✏️</button>
-        <button class="af-btn af-btn-sm af-btn-secondary" onclick="switchView('versions')">📜</button>
-      </span>
-    </div>
-
-    <div class="af-tabs">
-      <button class="af-tab active" id="af-tab-list" onclick="switchView('list')">📁 All Diagrams</button>
-      <button class="af-tab" id="af-tab-versions" onclick="switchView('versions')">📜 History</button>
-    </div>
-
     <div class="af-filter">
-      <input type="text" id="af-filter-project" placeholder="Filter by project..." oninput="handleFilterChange()" />
+      <input type="text" id="af-filter" placeholder="Filter by project..." oninput="window._af.filter()" />
     </div>
-
-    <div class="af-body" id="af-body"></div>
-
-    <div id="af-status" class="af-status"></div>
-
-    <div class="af-save-section">
-      <input type="text" id="af-save-title" placeholder="Diagram title..." />
-      <input type="text" id="af-save-project" placeholder="Project key (e.g. outpost)" />
+    <div id="af-list"><div class="af-empty">Loading...</div></div>
+    <div id="af-versions-container"></div>
+    <div id="af-status" class="af-status-msg"></div>
+    <div class="af-save-area">
+      <input type="text" id="af-title" placeholder="Diagram title..." />
+      <input type="text" id="af-project" placeholder="Project (e.g. outpost)" />
       <div class="af-save-buttons">
-        <button class="af-btn af-btn-primary" onclick="handleSave()">💾 Save</button>
-        <button class="af-btn af-btn-secondary" onclick="handleSaveNew()">➕ New</button>
-        <button class="af-btn af-btn-success" onclick="handleExportMarkdown()">📋 Copy</button>
+        <button class="af-btn af-btn-blue" onclick="window._af.save()">💾 Save</button>
+        <button class="af-btn" onclick="window._af.saveNew()">➕ New</button>
+        <button class="af-btn" onclick="window._af.copyMd()">📋 Copy</button>
       </div>
     </div>
   `;
-  document.body.appendChild(panel);
 
-  // Toggle button
-  const toggle = document.createElement('button');
-  toggle.id = 'aviflow-toggle';
-  toggle.textContent = '☁️ Diagrams';
-  toggle.onclick = togglePanel;
-  document.body.appendChild(toggle);
+  sidebar.appendChild(section);
+  sidebarSection = section;
+  refreshCloudList();
 }
 
-// ===================== Panel Logic =====================
+// ===================== Cloud List =====================
 
-function togglePanel() {
-  const panel = document.getElementById('aviflow-panel');
-  panelVisible = !panelVisible;
-  panel.classList.toggle('visible', panelVisible);
-  if (panelVisible) {
-    switchView('list');
-    refreshList();
-  }
-}
+async function refreshCloudList() {
+  const listEl = document.getElementById('af-list');
+  if (!listEl) return;
+  const filter = (document.getElementById('af-filter')?.value || '').trim();
 
-function switchView(view) {
-  panelView = view;
-  document.getElementById('af-tab-list').classList.toggle('active', view === 'list');
-  document.getElementById('af-tab-versions').classList.toggle('active', view === 'versions');
-  if (view === 'list') refreshList();
-  else if (view === 'versions') refreshVersions();
-}
-
-function showStatus(msg, type) {
-  const el = document.getElementById('af-status');
-  el.textContent = msg;
-  el.className = `af-status ${type || ''}`;
-  clearTimeout(statusTimeout);
-  statusTimeout = setTimeout(() => { el.textContent = ''; el.className = 'af-status'; }, 3000);
-}
-
-function updateCurrentBar() {
-  const bar = document.getElementById('af-current-bar');
-  const name = document.getElementById('af-current-name');
-  if (currentDiagramId && currentDiagramTitle) {
-    bar.style.display = 'flex';
-    name.textContent = currentDiagramTitle;
-  } else {
-    bar.style.display = 'none';
-  }
-}
-
-function handleFilterChange() {
-  projectFilter = document.getElementById('af-filter-project').value.trim();
-  refreshList();
-}
-
-// ===================== List View =====================
-
-async function refreshList() {
-  const body = document.getElementById('af-body');
-  body.innerHTML = '<div class="af-empty">Loading...</div>';
   try {
-    const diagrams = await listDiagrams(projectFilter || null);
+    const diagrams = await listDiagrams(filter || null);
     if (!diagrams.length) {
-      body.innerHTML = '<div class="af-empty">No diagrams yet.<br>Draw something and hit 💾 Save!</div>';
+      listEl.innerHTML = '<div class="af-empty">No cloud diagrams yet.<br>Draw something and hit 💾 Save!</div>';
       return;
     }
-    body.innerHTML = diagrams.map(d => `
-      <div class="af-item ${d.id === currentDiagramId ? 'active' : ''}" onclick="handleLoad('${d.id}')">
-        <div class="af-item-title">
+    listEl.innerHTML = diagrams.map(d => `
+      <div class="af-diagram-item ${d.id === currentDiagramId ? 'active' : ''}" onclick="window._af.load('${d.id}')">
+        <div class="af-diagram-name">
           <span>${esc(d.title)}</span>
-          <span style="font-size:10px;color:#6b7280;">v${d.version_count || 0}</span>
+          <span style="font-size:10px;color:#9ca3af;">v${d.version_count || 0}</span>
         </div>
-        <div class="af-item-meta">
+        <div class="af-diagram-meta">
           ${d.project_key ? `📁 ${esc(d.project_key)}` : ''}
-          ${d.created_by ? ` · 👤 ${esc(d.created_by)}` : ''}
+          ${d.created_by ? ` · ${esc(d.created_by)}` : ''}
           · ${fmtDate(d.updated_at)}
-          ${d.tags && d.tags.length ? ` · ${d.tags.map(t => `<span style="background:#374151;padding:1px 5px;border-radius:3px;font-size:10px;">${esc(t)}</span>`).join(' ')}` : ''}
         </div>
-        <div class="af-item-actions">
-          <button class="af-btn af-btn-sm af-btn-secondary" onclick="event.stopPropagation(); handleRenameById('${d.id}', '${esc(d.title)}')">✏️ Rename</button>
-          <button class="af-btn af-btn-sm af-btn-secondary" onclick="event.stopPropagation(); handleDuplicate('${d.id}')">📑 Duplicate</button>
-          <button class="af-btn af-btn-sm af-btn-danger" onclick="event.stopPropagation(); handleDelete('${d.id}')">🗑</button>
+        <div class="af-diagram-actions">
+          <button class="af-btn" onclick="event.stopPropagation(); window._af.rename('${d.id}', '${esc(d.title)}')">✏️ Rename</button>
+          <button class="af-btn" onclick="event.stopPropagation(); window._af.duplicate('${d.id}')">📑 Copy</button>
+          <button class="af-btn" onclick="event.stopPropagation(); window._af.versions('${d.id}')">📜</button>
+          <button class="af-btn af-btn-red" onclick="event.stopPropagation(); window._af.del('${d.id}')">🗑</button>
         </div>
       </div>
     `).join('');
   } catch (e) {
-    body.innerHTML = `<div class="af-empty" style="color:#ef4444;">Error: ${e.message}</div>`;
-  }
-}
-
-// ===================== Version History View =====================
-
-async function refreshVersions() {
-  const body = document.getElementById('af-body');
-  if (!currentDiagramId) {
-    body.innerHTML = '<div class="af-empty">Load a diagram first to see its version history.</div>';
-    return;
-  }
-  body.innerHTML = '<div class="af-empty">Loading history...</div>';
-  try {
-    const versions = await listVersions(currentDiagramId);
-    if (!versions.length) {
-      body.innerHTML = '<div class="af-empty">No version history yet.<br>Versions are created on each save.</div>';
-      return;
-    }
-    body.innerHTML = versions.map((v, i) => `
-      <div class="af-version-item" onclick="handleRestoreVersion('${v.id}', '${v.diagram_id}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:600;">v${versions.length - i}</span>
-          <span class="af-version-meta">${v.saved_by || '?'} · ${fmtDate(v.created_at)}</span>
-        </div>
-        <div class="af-version-preview">${esc((v.content || '').substring(0, 200))}</div>
-      </div>
-    `).join('');
-  } catch (e) {
-    body.innerHTML = `<div class="af-empty" style="color:#ef4444;">Error: ${e.message}</div>`;
+    listEl.innerHTML = `<div class="af-empty" style="color:#dc2626;">Error: ${e.message}</div>`;
   }
 }
 
@@ -489,135 +353,122 @@ async function refreshVersions() {
 
 async function handleLoad(id) {
   const diagram = await loadDiagram(id);
-  if (!diagram) { showStatus('Diagram not found', 'error'); return; }
-  
+  if (!diagram) { showMsg('Not found', 'err'); return; }
   currentDiagramId = diagram.id;
   currentDiagramTitle = diagram.title;
   lastSavedContent = diagram.content;
-  
-  document.getElementById('af-save-title').value = diagram.title;
-  document.getElementById('af-save-project').value = diagram.project_key || '';
-  
+  document.getElementById('af-title').value = diagram.title;
+  document.getElementById('af-project').value = diagram.project_key || '';
   setCanvasContent(diagram.content);
-  updateCurrentBar();
-  showStatus(`Loaded "${diagram.title}"`, 'success');
-  
-  // Reload to render
-  window.location.reload();
+  showMsg(`Loaded "${diagram.title}" — reloading...`, 'ok');
+  setTimeout(() => window.location.reload(), 300);
 }
 
 async function handleSave() {
-  const title = document.getElementById('af-save-title').value.trim() || 'Untitled';
-  const projectKey = document.getElementById('af-save-project').value.trim() || null;
+  const title = document.getElementById('af-title').value.trim() || 'Untitled';
+  const project = document.getElementById('af-project').value.trim() || null;
   const content = getCurrentDrawingText();
-  
-  if (!content) { showStatus('Nothing to save — draw something first!', 'error'); return; }
-  
-  const result = await saveDiagram(currentDiagramId, title, content, projectKey, 'dashboard');
+  if (!content) { showMsg('Nothing to save — draw first!', 'err'); return; }
+  const result = await saveDiagram(currentDiagramId, title, content, project, 'dashboard');
   if (Array.isArray(result) && result[0]) {
     currentDiagramId = result[0].id;
     currentDiagramTitle = result[0].title;
     lastSavedContent = content;
   }
-  updateCurrentBar();
-  refreshList();
-  showStatus(currentDiagramId ? `Saved "${title}" (new version)` : `Created "${title}"`, 'success');
+  showMsg(`Saved "${title}"`, 'ok');
+  refreshCloudList();
 }
 
 async function handleSaveNew() {
-  const title = document.getElementById('af-save-title').value.trim() || 'Untitled';
-  const projectKey = document.getElementById('af-save-project').value.trim() || null;
+  const title = document.getElementById('af-title').value.trim() || 'Untitled';
+  const project = document.getElementById('af-project').value.trim() || null;
   const content = getCurrentDrawingText();
-  
-  if (!content) { showStatus('Nothing to save — draw something first!', 'error'); return; }
-  
-  const result = await saveDiagram(null, title, content, projectKey, 'dashboard');
+  if (!content) { showMsg('Nothing to save — draw first!', 'err'); return; }
+  currentDiagramId = null;
+  const result = await saveDiagram(null, title, content, project, 'dashboard');
   if (Array.isArray(result) && result[0]) {
     currentDiagramId = result[0].id;
     currentDiagramTitle = result[0].title;
     lastSavedContent = content;
   }
-  updateCurrentBar();
-  refreshList();
-  showStatus(`Created "${title}"`, 'success');
+  showMsg(`Created "${title}"`, 'ok');
+  refreshCloudList();
 }
 
-function handleRename() {
-  if (!currentDiagramId) return;
-  const newTitle = prompt('Rename diagram:', currentDiagramTitle || '');
-  if (newTitle && newTitle !== currentDiagramTitle) {
-    renameDiagram(currentDiagramId, newTitle).then(() => {
-      currentDiagramTitle = newTitle;
-      document.getElementById('af-save-title').value = newTitle;
-      updateCurrentBar();
-      refreshList();
-      showStatus(`Renamed to "${newTitle}"`, 'success');
-    });
-  }
-}
-
-function handleRenameById(id, currentTitle) {
+function handleRename(id, currentTitle) {
   const newTitle = prompt('Rename diagram:', currentTitle || '');
-  if (newTitle && newTitle !== currentTitle) {
-    renameDiagram(id, newTitle).then(() => {
-      if (id === currentDiagramId) {
-        currentDiagramTitle = newTitle;
-        document.getElementById('af-save-title').value = newTitle;
-        updateCurrentBar();
-      }
-      refreshList();
-      showStatus(`Renamed to "${newTitle}"`, 'success');
-    });
-  }
+  if (!newTitle || newTitle === currentTitle) return;
+  renameDiagram(id, newTitle).then(() => {
+    if (id === currentDiagramId) {
+      currentDiagramTitle = newTitle;
+      document.getElementById('af-title').value = newTitle;
+    }
+    showMsg(`Renamed to "${newTitle}"`, 'ok');
+    refreshCloudList();
+  });
 }
 
 async function handleDuplicate(id) {
-  const diagram = await loadDiagram(id);
-  if (!diagram) return;
-  const result = await saveDiagram(null, `${diagram.title} (copy)`, diagram.content, diagram.project_key, 'dashboard', diagram.tags);
-  refreshList();
-  showStatus(`Duplicated "${diagram.title}"`, 'success');
+  const d = await loadDiagram(id);
+  if (!d) return;
+  await saveDiagram(null, `${d.title} (copy)`, d.content, d.project_key, 'dashboard', d.tags);
+  showMsg(`Duplicated "${d.title}"`, 'ok');
+  refreshCloudList();
 }
 
 async function handleDelete(id) {
-  if (!confirm('Delete this diagram and all its versions?')) return;
+  if (!confirm('Delete this diagram and all versions?')) return;
   await deleteDiagram(id);
-  if (currentDiagramId === id) {
-    currentDiagramId = null;
-    currentDiagramTitle = null;
-    updateCurrentBar();
-  }
-  refreshList();
-  showStatus('Deleted', 'success');
+  if (currentDiagramId === id) { currentDiagramId = null; currentDiagramTitle = null; }
+  showMsg('Deleted', 'ok');
+  refreshCloudList();
 }
 
-async function handleRestoreVersion(versionId, diagramId) {
-  if (!confirm('Restore this version? Current drawing will be replaced.')) return;
+async function handleVersions(id) {
+  const container = document.getElementById('af-versions-container');
+  if (!container) return;
+  const versions = await listVersions(id);
+  if (!versions.length) {
+    container.innerHTML = '<div class="af-versions-area"><div class="af-empty">No versions yet</div></div>';
+    return;
+  }
+  container.innerHTML = `
+    <div class="af-versions-area">
+      <div style="font-weight:600;font-size:12px;margin-bottom:6px;">📜 Version History
+        <button class="af-btn" onclick="document.getElementById('af-versions-container').innerHTML=''" style="float:right;">✕</button>
+      </div>
+      ${versions.map((v, i) => `
+        <div class="af-version-item" onclick="window._af.restore('${v.id}')">
+          <strong>v${versions.length - i}</strong> · ${v.saved_by || '?'} · ${fmtDate(v.created_at)}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+async function handleRestore(versionId) {
+  if (!confirm('Restore this version? Current canvas will be replaced.')) return;
   const res = await fetch(`${API}/diagram_versions?id=eq.${versionId}`, { headers: HEADERS });
   const versions = await res.json();
-  if (!versions[0]) { showStatus('Version not found', 'error'); return; }
-  
+  if (!versions[0]) { showMsg('Version not found', 'err'); return; }
   setCanvasContent(versions[0].content);
-  showStatus('Restored — reload to see changes', 'success');
-  window.location.reload();
+  showMsg('Restored — reloading...', 'ok');
+  setTimeout(() => window.location.reload(), 300);
 }
 
-function handleExportMarkdown() {
+function handleCopyMd() {
   const content = getCurrentDrawingText();
-  if (!content) { showStatus('Nothing to copy', 'error'); return; }
-  
-  // Parse the localStorage JSON format to extract readable ASCII
-  let ascii = '';
+  if (!content) { showMsg('Nothing to copy', 'err'); return; }
+  let ascii = content;
   try {
     const parsed = JSON.parse(content);
-    // Reconstruct from character map
     if (parsed && typeof parsed === 'object') {
       const chars = {};
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const [key, val] of Object.entries(parsed)) {
-        const match = key.match(/(-?\d+),(-?\d+)/);
-        if (match) {
-          const x = parseInt(match[1]), y = parseInt(match[2]);
+        const m = key.match(/(-?\d+),(-?\d+)/);
+        if (m) {
+          const x = parseInt(m[1]), y = parseInt(m[2]);
           chars[key] = typeof val === 'string' ? val : val.char || val;
           minX = Math.min(minX, x); minY = Math.min(minY, y);
           maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
@@ -626,52 +477,26 @@ function handleExportMarkdown() {
       const lines = [];
       for (let y = minY; y <= maxY; y++) {
         let line = '';
-        for (let x = minX; x <= maxX; x++) {
-          line += chars[`${x},${y}`] || ' ';
-        }
+        for (let x = minX; x <= maxX; x++) line += chars[`${x},${y}`] || ' ';
         lines.push(line.trimEnd());
       }
-      // Remove trailing empty lines
       while (lines.length && !lines[lines.length - 1]) lines.pop();
       ascii = lines.join('\n');
     }
-  } catch {
-    ascii = content;
-  }
-  
-  const title = currentDiagramTitle || 'Untitled';
-  const md = '```\n' + ascii + '\n```';
-  
-  navigator.clipboard.writeText(md).then(() => {
-    showStatus('Copied as markdown!', 'success');
-  }).catch(() => {
-    // Fallback
-    const ta = document.createElement('textarea');
-    ta.value = md;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    showStatus('Copied as markdown!', 'success');
-  });
+  } catch {}
+  navigator.clipboard.writeText('```\n' + ascii + '\n```').then(
+    () => showMsg('Copied as markdown!', 'ok'),
+    () => showMsg('Copy failed', 'err')
+  );
 }
 
-// ===================== Auto-save =====================
-
-setInterval(() => {
-  if (!autoSaveEnabled || !currentDiagramId) return;
-  const content = getCurrentDrawingText();
-  if (content && content !== lastSavedContent) {
-    const title = document.getElementById('af-save-title')?.value || currentDiagramTitle || 'Untitled';
-    const projectKey = document.getElementById('af-save-project')?.value || null;
-    saveDiagram(currentDiagramId, title, content, projectKey, 'dashboard').then(() => {
-      lastSavedContent = content;
-      showStatus('Auto-saved', 'success');
-    }).catch(() => {});
-  }
-}, 30000);
-
 // ===================== Helpers =====================
+
+function showMsg(text, type) {
+  const el = document.getElementById('af-status');
+  if (el) { el.textContent = text; el.className = `af-status-msg ${type || ''}`; }
+  setTimeout(() => { if (el) { el.textContent = ''; el.className = 'af-status-msg'; } }, 3000);
+}
 
 function esc(s) {
   if (!s) return '';
@@ -682,26 +507,48 @@ function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-         d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
+
+// ===================== Auto-save =====================
+
+setInterval(() => {
+  if (!currentDiagramId) return;
+  const content = getCurrentDrawingText();
+  if (content && content !== lastSavedContent) {
+    const title = document.getElementById('af-title')?.value || currentDiagramTitle || 'Untitled';
+    const project = document.getElementById('af-project')?.value || null;
+    saveDiagram(currentDiagramId, title, content, project, 'dashboard').then(() => {
+      lastSavedContent = content;
+      showMsg('Auto-saved', 'ok');
+    }).catch(() => {});
+  }
+}, 30000);
 
 // ===================== Init =====================
 
-window.addEventListener('DOMContentLoaded', () => {
-  createPanel();
-  updateCurrentBar();
-});
+// Expose API for onclick handlers
+window._af = {
+  refresh: refreshCloudList,
+  filter: () => refreshCloudList(),
+  load: handleLoad,
+  save: handleSave,
+  saveNew: handleSaveNew,
+  rename: handleRename,
+  duplicate: handleDuplicate,
+  del: handleDelete,
+  versions: handleVersions,
+  restore: handleRestore,
+  copyMd: handleCopyMd,
+};
 
-// Expose for onclick handlers
-window.togglePanel = togglePanel;
-window.switchView = switchView;
-window.handleLoad = handleLoad;
-window.handleSave = handleSave;
-window.handleSaveNew = handleSaveNew;
-window.handleRename = handleRename;
-window.handleRenameById = handleRenameById;
-window.handleDuplicate = handleDuplicate;
-window.handleDelete = handleDelete;
-window.handleRestoreVersion = handleRestoreVersion;
-window.handleExportMarkdown = handleExportMarkdown;
-window.handleFilterChange = handleFilterChange;
+window.addEventListener('DOMContentLoaded', () => {
+  // Remove the old toggle button if it exists
+  const oldToggle = document.getElementById('aviflow-toggle') || document.getElementById('supabase-toggle');
+  if (oldToggle) oldToggle.remove();
+  const oldPanel = document.getElementById('aviflow-panel') || document.getElementById('supabase-panel');
+  if (oldPanel) oldPanel.remove();
+
+  // Inject into sidebar
+  injectIntoSidebar();
+});
