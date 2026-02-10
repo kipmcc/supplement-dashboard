@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Operations Manual — Supplement Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { background: #111827; color: #e5e7eb; }
+    .markdown-body { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .markdown-body h1 { font-size: 2rem; font-weight: bold; color: #60a5fa; margin-bottom: 1rem; border-bottom: 1px solid #374151; padding-bottom: 0.5rem; }
+    .markdown-body h2 { font-size: 1.5rem; font-weight: bold; color: #34d399; margin-top: 2rem; margin-bottom: 1rem; }
+    .markdown-body h3 { font-size: 1.25rem; font-weight: bold; color: #fbbf24; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    .markdown-body p { margin-bottom: 1rem; line-height: 1.7; }
+    .markdown-body ul, .markdown-body ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+    .markdown-body li { margin-bottom: 0.5rem; }
+    .markdown-body code { background: #1f2937; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.9rem; color: #f472b6; }
+    .markdown-body pre { background: #1f2937; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; }
+    .markdown-body pre code { background: none; padding: 0; color: #e5e7eb; }
+    .markdown-body table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    .markdown-body th, .markdown-body td { border: 1px solid #374151; padding: 0.5rem 1rem; text-align: left; }
+    .markdown-body th { background: #1f2937; color: #60a5fa; }
+    .markdown-body blockquote { border-left: 4px solid #60a5fa; padding-left: 1rem; color: #9ca3af; margin-bottom: 1rem; }
+    .markdown-body hr { border: none; border-top: 1px solid #374151; margin: 2rem 0; }
+    .markdown-body a { color: #60a5fa; text-decoration: underline; }
+    .markdown-body strong { color: #f9fafb; }
+    .last-updated { text-align: center; color: #6b7280; font-size: 0.875rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="markdown-body">
+    <div class="last-updated">Loading...</div>
+    <div id="content">Loading AI Operations Manual...</div>
+  </div>
+
+  <script>
+    // Fetch and render the README
+    async function loadReadme() {
+      try {
+        const response = await fetch('/AI_README.md');
+        if (!response.ok) throw new Error('Failed to load README');
+        const markdown = await response.text();
+        
+        // Extract last updated from first few lines
+        const lines = markdown.split('\n');
+        const lastUpdatedLine = lines.find(l => l.includes('Last updated:'));
+        if (lastUpdatedLine) {
+          document.querySelector('.last-updated').textContent = lastUpdatedLine.replace(/\*/g, '');
+        }
+        
+        document.getElementById('content').innerHTML = marked.parse(markdown);
+      } catch (error) {
+        document.getElementById('content').innerHTML = `
+          <p style="color: #ef4444;">Error loading README: ${error.message}</p>
+          <p>Try refreshing the page or check that AI_README.md exists in the repo.</p>
+        `;
+      }
+    }
+    
+    loadReadme();
+    
+    // Auto-refresh every 5 minutes
+    setInterval(loadReadme, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
