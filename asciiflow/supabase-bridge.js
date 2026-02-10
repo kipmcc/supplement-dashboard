@@ -80,40 +80,39 @@ async function listVersions(diagramId) {
 }
 
 // ===================== Canvas (ASCIIFlow Internal Format) =====================
-// ASCIIFlow stores layers as: base64(pako.deflate(JSON({name, layer: JSON({version:2, x, y, text})})))
+// committed-layer stores Layer.serialize() output: JSON string {version:2, x, y, text}
 
-function asciiToStorageFormat(asciiText, drawingName) {
-  // Build the layer JSON
-  const layerJson = JSON.stringify({ version: 2, x: 0, y: 0, text: asciiText });
-  // Build the drawing JSON
-  const drawingJson = JSON.stringify({ name: drawingName || 'default', layer: layerJson });
-  // Compress and base64 encode
-  const jsonBytes = new TextEncoder().encode(drawingJson);
-  const deflated = pako.deflate(jsonBytes);
-  return Base64.fromUint8Array(deflated);
+function asciiToLayerFormat(asciiText) {
+  return JSON.stringify({ version: 2, x: 0, y: 0, text: asciiText });
 }
 
-function storageToAscii(storageValue) {
+function layerFormatToAscii(layerJson) {
   try {
-    const deflated = Base64.toUint8Array(storageValue);
-    const jsonBytes = pako.inflate(deflated);
-    const jsonString = new TextDecoder('utf8').decode(jsonBytes);
-    const drawing = JSON.parse(jsonString);
-    const layer = JSON.parse(drawing.layer);
+    const layer = JSON.parse(layerJson);
     return layer.text || '';
   } catch {
-    // Might be raw text (old format)
-    return storageValue;
+    return layerJson; // Fallback: raw text
   }
 }
 
+function getStorageKeyPrefix() {
+  // ASCIIFlow key format: drawing/{encodedPersistentKey}/
+  // persistentKey = Persistent.key("local", id) = encodeURIComponent("local") + "/" + encodeURIComponent(id)
+  // But Persistent.key just joins with "/" after encoding each part
+  // Actually from source: Persistent.key(...parts) = parts.map(p => encodeURIComponent(p)).join("/")
+  // So persistentKey for "local","default" = "local/default"
+  // Then storagePrefix = "drawing/" + encodeURIComponent("local/default") + "/" = "drawing/local%2Fdefault/"
+  const drawingName = getCurrentDrawingName();
+  const persistentKey = encodeURIComponent('local') + '/' + encodeURIComponent(drawingName);
+  return `drawing/${encodeURIComponent(persistentKey)}/`;
+}
+
 function getCurrentDrawingText() {
-  const keys = Object.keys(localStorage).filter(k => k.startsWith('drawing/'));
-  const committedKey = keys.find(k => k.includes('committed-layer'));
-  if (!committedKey) return '';
-  const raw = localStorage.getItem(committedKey) || '';
-  // Return as ASCII text for cloud storage
-  return storageToAscii(raw);
+  // Find committed-layer key
+  const keys = Object.keys(localStorage).filter(k => k.includes('committed-layer'));
+  if (!keys.length) return '';
+  const raw = localStorage.getItem(keys[0]) || '';
+  return layerFormatToAscii(raw);
 }
 
 function getCurrentDrawingName() {
@@ -124,14 +123,11 @@ function getCurrentDrawingName() {
 }
 
 function setCanvasContent(asciiText) {
-  const drawingName = getCurrentDrawingName();
-  const storageKey = `drawing/${encodeURIComponent(`local/${encodeURIComponent(drawingName)}`)}/committed-layer`;
-  const encoded = asciiToStorageFormat(asciiText, drawingName);
-  localStorage.setItem(storageKey, encoded);
-  // Clear undo/redo
-  const prefix = storageKey.replace('/committed-layer', '');
-  localStorage.setItem(`${prefix}/undo-layers`, '[]');
-  localStorage.setItem(`${prefix}/redo-layers`, '[]');
+  const prefix = getStorageKeyPrefix();
+  const layerJson = asciiToLayerFormat(asciiText);
+  localStorage.setItem(prefix + 'committed-layer', layerJson);
+  localStorage.setItem(prefix + 'undo-layers', '[]');
+  localStorage.setItem(prefix + 'redo-layers', '[]');
 }
 
 // ===================== State =====================
@@ -522,33 +518,8 @@ async function handleRestore(versionId) {
 }
 
 function handleCopyMd() {
-  const content = getCurrentDrawingText();
-  if (!content) { showMsg('Nothing to copy', 'err'); return; }
-  let ascii = content;
-  try {
-    const parsed = JSON.parse(content);
-    if (parsed && typeof parsed === 'object') {
-      const chars = {};
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const [key, val] of Object.entries(parsed)) {
-        const m = key.match(/(-?\d+),(-?\d+)/);
-        if (m) {
-          const x = parseInt(m[1]), y = parseInt(m[2]);
-          chars[key] = typeof val === 'string' ? val : val.char || val;
-          minX = Math.min(minX, x); minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-        }
-      }
-      const lines = [];
-      for (let y = minY; y <= maxY; y++) {
-        let line = '';
-        for (let x = minX; x <= maxX; x++) line += chars[`${x},${y}`] || ' ';
-        lines.push(line.trimEnd());
-      }
-      while (lines.length && !lines[lines.length - 1]) lines.pop();
-      ascii = lines.join('\n');
-    }
-  } catch {}
+  const ascii = getCurrentDrawingText();
+  if (!ascii) { showMsg('Nothing to copy', 'err'); return; }
   navigator.clipboard.writeText('```\n' + ascii + '\n```').then(
     () => showMsg('Copied as markdown!', 'ok'),
     () => showMsg('Copy failed', 'err')
