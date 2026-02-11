@@ -24,7 +24,12 @@ import {
   Snackbar,
   TextField,
 } from "@material-ui/core";
-import * as Icons from "@material-ui/icons";
+import {
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+  Download, Share2, FileText, MoreHorizontal, Trash2, Plus, Pencil,
+  Square, MousePointer2, PenTool, ArrowUpRight, Minus, Type, Eraser,
+  Sun, Moon, Keyboard,
+} from "lucide-react";
 import * as React from "react";
 import { useState } from "react";
 import { useHistory } from "react-router";
@@ -58,9 +63,9 @@ export function Drawer() {
             onClick={() => store.controlsOpen.set(!store.controlsOpen.get())}
           >
             {store.controlsOpen.get() ? (
-              <Icons.ChevronLeft />
+              <ChevronLeft size={20} />
             ) : (
-              <Icons.ChevronRight />
+              <ChevronRight size={20} />
             )}
           </IconButton>
         </div>
@@ -74,7 +79,7 @@ export function Drawer() {
                   <ExportDialog
                     button={
                       <IconButton>
-                        <Icons.GetApp />
+                        <Download size={20} />
                       </IconButton>
                     }
                     drawingId={store.route.get()}
@@ -87,9 +92,9 @@ export function Drawer() {
                     }
                   >
                     {store.fileControlsOpen.get() ? (
-                      <Icons.ExpandLess />
+                      <ChevronUp size={20} />
                     ) : (
-                      <Icons.ExpandMore />
+                      <ChevronDown size={20} />
                     )}
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -107,19 +112,21 @@ export function Drawer() {
                   >
                     <ListItemIcon>
                       {drawingId.shareSpec ? (
-                        <Icons.Share
+                        <Share2
+                          size={20}
                           color={
                             store.route.get().toString() === drawingId.toString()
-                              ? "primary"
-                              : "inherit"
+                              ? "#1976d2"
+                              : "currentColor"
                           }
                         />
                       ) : (
-                        <Icons.FileCopy
+                        <FileText
+                          size={20}
                           color={
                             store.route.get().toString() === drawingId.toString()
-                              ? "primary"
-                              : "inherit"
+                              ? "#1976d2"
+                              : "currentColor"
                           }
                         />
                       )}
@@ -140,7 +147,7 @@ export function Drawer() {
                       <ControlledMenu
                         button={
                           <IconButton>
-                            <Icons.MoreHoriz />
+                            <MoreHorizontal size={20} />
                           </IconButton>
                         }
                       >
@@ -155,7 +162,7 @@ export function Drawer() {
                               button={
                                 <MenuItem>
                                   <ListItemIcon>
-                                    <Icons.Delete />
+                                    <Trash2 size={20} />
                                   </ListItemIcon>
                                   Delete
                                 </MenuItem>
@@ -190,7 +197,7 @@ export function Drawer() {
                           button={
                             <MenuItem>
                               <ListItemIcon>
-                                <Icons.GetApp />
+                                <Download size={20} />
                               </ListItemIcon>
                               Export
                             </MenuItem>
@@ -211,9 +218,9 @@ export function Drawer() {
                     }
                   >
                     {store.editControlsOpen.get() ? (
-                      <Icons.ExpandLess />
+                      <ChevronUp size={20} />
                     ) : (
-                      <Icons.ExpandMore />
+                      <ChevronDown size={20} />
                     )}
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -234,21 +241,21 @@ export function Drawer() {
                   <ToolControl
                     name="Boxes"
                     tool={ToolMode.BOX}
-                    icon={<Icons.CheckBoxOutlineBlank />}
+                    icon={<Square size={20} />}
                   >
                     <ShortcutChip label={"alt + 1"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
                     name="Select & Move"
                     tool={ToolMode.SELECT}
-                    icon={<Icons.NearMe />}
+                    icon={<MousePointer2 size={20} />}
                   >
                     <ShortcutChip label={"alt + 2"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
                     name="Freeform"
                     tool={ToolMode.FREEFORM}
-                    icon={<Icons.Gesture />}
+                    icon={<PenTool size={20} />}
                   >
                     <ListItemSecondaryAction>
                       <ShortcutChip label={"alt + 3"} hideUntilAlt={true} />
@@ -258,7 +265,7 @@ export function Drawer() {
                   <ToolControl
                     name="Arrow"
                     tool={ToolMode.ARROWS}
-                    icon={<Icons.TrendingUp />}
+                    icon={<ArrowUpRight size={20} />}
                   >
                     <ShortcutChip label={"alt + 4"} hideUntilAlt={true} />
                   </ToolControl>
@@ -266,21 +273,21 @@ export function Drawer() {
                   <ToolControl
                     name="Line"
                     tool={ToolMode.LINES}
-                    icon={<Icons.ShowChart />}
+                    icon={<Minus size={20} />}
                   >
                     <ShortcutChip label={"alt + 5"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
                     name="Text"
                     tool={ToolMode.TEXT}
-                    icon={<Icons.TextFields />}
+                    icon={<Type size={20} />}
                   >
                     <ShortcutChip label={"alt + 6"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
                     name="Erase"
                     tool={ToolMode.ERASE}
-                    icon={<Icons.Backspace />}
+                    icon={<Eraser size={20} />}
                   >
                     <ShortcutChip label={"alt + 7"} hideUntilAlt={true} />
                   </ToolControl>
@@ -303,9 +310,9 @@ export function Drawer() {
                     onClick={() => store.darkMode.set(!store.darkMode.get())}
                   >
                     {store.darkMode.get() ? (
-                      <Icons.WbIncandescent />
+                      <Sun size={20} />
                     ) : (
-                      <Icons.Brightness2Outlined />
+                      <Moon size={20} />
                     )}
                   </IconButton>
                   <IconButton
@@ -314,9 +321,9 @@ export function Drawer() {
                     }
                   >
                     {store.helpControlsOpen.get() ? (
-                      <Icons.ExpandLess />
+                      <ChevronUp size={20} />
                     ) : (
-                      <Icons.ExpandMore />
+                      <ChevronDown size={20} />
                     )}
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -329,7 +336,7 @@ export function Drawer() {
                   Draw boxes by dragging from one corner to another. Boxes can
                   be resized and moved with the{" "}
                   <Chip
-                    icon={<Icons.NearMe />}
+                    icon={<MousePointer2 size={20} />}
                     label="Select & Move"
                     size="small"
                   />{" "}
@@ -351,7 +358,7 @@ export function Drawer() {
                   orientation of the line. Lines can be resized and moved with
                   the{" "}
                   <Chip
-                    icon={<Icons.NearMe />}
+                    icon={<MousePointer2 size={20} />}
                     label="Select & Move"
                     size="small"
                   />{" "}
@@ -363,7 +370,7 @@ export function Drawer() {
                   orientation of the line. Lines can be resized and moved with
                   the{" "}
                   <Chip
-                    icon={<Icons.NearMe />}
+                    icon={<MousePointer2 size={20} />}
                     label="Select & Move"
                     size="small"
                   />{" "}
@@ -428,7 +435,7 @@ function ShortcutChip({
     if (hideUntilAlt && !store.altPressed.get()) return null;
     return (
       <Chip
-        icon={<Icons.KeyboardOutlined />}
+        icon={<Keyboard size={16} />}
         label={
           <span style={{ fontFamily: "monospace", fontSize: 12 }}>{label}</span>
         }
@@ -546,7 +553,7 @@ function NewDrawingButton() {
     <ControlledDialog
       button={
         <IconButton>
-          <Icons.Add />
+          <Plus size={20} />
         </IconButton>
       }
       confirmButton={
@@ -593,7 +600,7 @@ function RenameDrawingButton({ drawingId }: { drawingId: DrawingId }) {
       button={
         <MenuItem>
           <ListItemIcon>
-            <Icons.Edit />
+            <Pencil size={20} />
           </ListItemIcon>
           Rename
         </MenuItem>
@@ -647,12 +654,12 @@ function ForkDrawingButton({
         menu ? (
           <MenuItem>
             <ListItemIcon>
-              <Icons.Edit />
+              <Pencil size={20} />
             </ListItemIcon>
             Fork & edit
           </MenuItem>
         ) : (
-          <Button color="primary" startIcon={<Icons.Edit />}>
+          <Button color="primary" startIcon={<Pencil size={20} />}>
             Fork & edit
           </Button>
         )
@@ -702,7 +709,7 @@ function ShareButton({ drawingId }: { drawingId: DrawingId }) {
       }}
     >
       <ListItemIcon>
-        <Icons.Share />
+        <Share2 size={20} />
       </ListItemIcon>
       Share
       <Snackbar
