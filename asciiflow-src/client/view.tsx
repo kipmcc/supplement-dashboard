@@ -137,21 +137,19 @@ function render(canvas: HTMLCanvasElement) {
   const txDev = canvas.width / 2;
   const tyDev = canvas.height / 2;
 
-  // Only render grid lines and cells that are visible.
-  // Use CSS dimensions (not physical canvas pixels) for screen-space calculations.
-  const startOffset = screenToCell(new Vector(0, 0)).subtract(
-    new Vector(constants.RENDER_PADDING_CELLS, constants.RENDER_PADDING_CELLS)
+  // Compute visible cell range directly from viewport bounds.
+  // We bypass screenToCell/frameToCell because frameToCell clamps to
+  // Math.max(1,...) which prevents negative cell indices needed for
+  // grid lines that extend to the left/top of the viewport.
+  const pad = constants.RENDER_PADDING_CELLS;
+  const startOffset = new Vector(
+    Math.floor((-cssW / 2 / zoom + offset.x) / constants.CHAR_PIXELS_H) - pad,
+    Math.floor((-cssH / 2 / zoom + offset.y) / constants.CHAR_PIXELS_V) - pad
   );
-  const endOffset = screenToCell(new Vector(cssW, cssH)).add(
-    new Vector(constants.RENDER_PADDING_CELLS, constants.RENDER_PADDING_CELLS)
+  const endOffset = new Vector(
+    Math.ceil((cssW / 2 / zoom + offset.x) / constants.CHAR_PIXELS_H) + pad,
+    Math.ceil((cssH / 2 / zoom + offset.y) / constants.CHAR_PIXELS_V) + pad
   );
-
-  // Don't clamp start to 0 — grid lines should extend into negative cell
-  // space so the grid covers the full viewport even when offset is small.
-  startOffset.x = Math.min(startOffset.x, constants.MAX_GRID_WIDTH);
-  endOffset.x = Math.min(endOffset.x, constants.MAX_GRID_WIDTH);
-  startOffset.y = Math.min(startOffset.y, constants.MAX_GRID_HEIGHT);
-  endOffset.y = Math.min(endOffset.y, constants.MAX_GRID_HEIGHT);
 
   const colors = getColors();
 
