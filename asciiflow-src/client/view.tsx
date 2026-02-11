@@ -160,16 +160,22 @@ function render(canvas: HTMLCanvasElement) {
   context.strokeStyle = colors.grid;
   context.beginPath();
   for (let i = startOffset.x; i < endOffset.x; i++) {
-    context.moveTo(i * constants.CHAR_PIXELS_H - offset.x, 0 - offset.y);
+    context.moveTo(
+      i * constants.CHAR_PIXELS_H - offset.x,
+      startOffset.y * constants.CHAR_PIXELS_V - offset.y
+    );
     context.lineTo(
       i * constants.CHAR_PIXELS_H - offset.x,
-      2000 * constants.CHAR_PIXELS_V - offset.y
+      endOffset.y * constants.CHAR_PIXELS_V - offset.y
     );
   }
   for (let j = startOffset.y; j < endOffset.y; j++) {
-    context.moveTo(0 - offset.x, j * constants.CHAR_PIXELS_V - offset.y);
+    context.moveTo(
+      startOffset.x * constants.CHAR_PIXELS_H - offset.x,
+      j * constants.CHAR_PIXELS_V - offset.y
+    );
     context.lineTo(
-      2000 * constants.CHAR_PIXELS_H - offset.x,
+      endOffset.x * constants.CHAR_PIXELS_H - offset.x,
       j * constants.CHAR_PIXELS_V - offset.y
     );
   }
