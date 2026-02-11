@@ -5,6 +5,7 @@ import {
   IDrawFunction
 } from "#asciiflow/client/draw/function";
 import { DrawLine } from "#asciiflow/client/draw/line";
+import { DrawErase } from "#asciiflow/client/draw/erase";
 import { DrawNull } from "#asciiflow/client/draw/null";
 import { DrawSelect } from "#asciiflow/client/draw/select";
 import { DrawText } from "#asciiflow/client/draw/text";
@@ -25,6 +26,7 @@ export enum ToolMode {
   ARROWS = 6,
   LINES = 4,
   TEXT = 7,
+  ERASE = 5,
 }
 
 export interface IModifierKeys {
@@ -97,6 +99,7 @@ export class Store {
   public readonly selectTool = new DrawSelect();
   public readonly freeformTool = new DrawFreeform();
   public readonly textTool = new DrawText();
+  public readonly eraseTool = new DrawErase();
   public readonly nullTool = new DrawNull();
 
   private readonly _route = watchableValue(DrawingId.local(null));
@@ -161,6 +164,8 @@ export class Store {
       ? this.freeformTool
       : this.toolMode() === ToolMode.TEXT
       ? this.textTool
+      : this.toolMode() === ToolMode.ERASE
+      ? this.eraseTool
       : this.toolMode() === ToolMode.SELECT
       ? this.selectTool
       : this.nullTool;

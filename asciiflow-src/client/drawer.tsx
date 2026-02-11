@@ -277,6 +277,13 @@ export function Drawer() {
                   >
                     <ShortcutChip label={"alt + 6"} hideUntilAlt={true} />
                   </ToolControl>
+                  <ToolControl
+                    name="Erase"
+                    tool={ToolMode.ERASE}
+                    icon={<Icons.Backspace />}
+                  >
+                    <ShortcutChip label={"alt + 7"} hideUntilAlt={true} />
+                  </ToolControl>
                 </>
               )}
               <ListItem>
@@ -375,14 +382,20 @@ export function Drawer() {
                   new line without committing your changes. Use the{" "}
                   <ShortcutChip label={"arrow keys"} /> to move around.
                 </ToolHelp>{" "}
-                Pan around the canvas by holding <ShortcutChip label="space" />
-                {store.route.get().shareSpec ? (
-                  "."
-                ) : (
+                <ToolHelp tool={ToolMode.ERASE}>
+                  Click and drag to erase a rectangular area. Use this to clean
+                  up leftover artifacts after moving elements.
+                </ToolHelp>{" "}
+                Scroll to pan vertically.{" "}
+                <ShortcutChip label="shift + scroll" /> to pan horizontally.{" "}
+                <ShortcutChip label={`${ctrlOrCmd()} + scroll`} /> to zoom.{" "}
+                <ShortcutChip label="space" />+drag or middle-click drag also
+                pans.
+                {!store.route.get().shareSpec && (
                   <>
                     {" "}
-                    and dragging with the mouse. Use{" "}
-                    <ShortcutChip label={`${ctrlOrCmd()} + z`} /> to undo and{" "}
+                    Use <ShortcutChip label={`${ctrlOrCmd()} + z`} /> to undo
+                    and{" "}
                     <ShortcutChip label={`${ctrlOrCmd()} + shift + z`} /> to
                     redo.
                   </>

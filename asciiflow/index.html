@@ -175,6 +175,8 @@
           };
           setTimeout(restore, 50);
           setTimeout(restore, 300);
+          // Force canvas redraw after CSS transition completes
+          setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
         });
       }
 

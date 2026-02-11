@@ -46,14 +46,33 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) =>
       return () => disposer();
     });
 
+    // Attach a non-passive wheel listener so Ctrl+scroll preventDefault()
+    // actually works (React 17 registers onWheel as passive).
+    useEffect(() => {
+      const canvas = document.getElementById("ascii-canvas") as HTMLCanvasElement;
+      if (!canvas) return;
+      const handler = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+        }
+      };
+      canvas.addEventListener("wheel", handler, { passive: false });
+      return () => canvas.removeEventListener("wheel", handler);
+    });
+
     // Add an cleanup an event listener on the window.
     useEffect(() => {
       const handler = () => {
         const canvas = document.getElementById(
           "ascii-canvas"
         ) as HTMLCanvasElement;
-        canvas.width = document.documentElement.clientWidth;
-        canvas.height = document.documentElement.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = document.documentElement.clientWidth;
+        const cssH = document.documentElement.clientHeight;
+        canvas.width = cssW * dpr;
+        canvas.height = cssH * dpr;
+        canvas.style.width = cssW + "px";
+        canvas.style.height = cssH + "px";
         render(canvas);
       };
       window.addEventListener("resize", handler);
@@ -62,10 +81,13 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) =>
       };
     });
 
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = document.documentElement.clientWidth;
+    const cssH = document.documentElement.clientHeight;
     return (
       <canvas
-        width={document.documentElement.clientWidth}
-        height={document.documentElement.clientHeight}
+        width={cssW * dpr}
+        height={cssH * dpr}
         tabIndex={0}
         style={{
           backgroundColor: colors.background,
@@ -73,6 +95,8 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) =>
           position: "fixed",
           left: 0,
           top: 0,
+          width: cssW + "px",
+          height: cssH + "px",
         }}
         id="ascii-canvas"
         {...rest}
@@ -91,21 +115,35 @@ function render(canvas: HTMLCanvasElement) {
   const selection = store.currentCanvas.selection.get();
 
   const context = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  // CSS dimensions (what screenToFrame/screenToCell expect)
+  const cssW = canvas.width / dpr;
+  const cssH = canvas.height / dpr;
+
   context.setTransform(1, 0, 0, 1, 0, 0);
-  // Clear the visible area.
+  // Clear the full physical canvas.
   context.clearRect(0, 0, canvas.width, canvas.height);
 
   const zoom = store.currentCanvas.zoom;
   const offset = store.currentCanvas.offset;
 
-  context.scale(zoom, zoom);
-  context.translate(canvas.width / 2 / zoom, canvas.height / 2 / zoom);
+  // Scale by DPR first so all subsequent coordinates are in CSS pixels,
+  // then apply the zoom/translate as before.
+  context.scale(dpr * zoom, dpr * zoom);
+  context.translate(cssW / 2 / zoom, cssH / 2 / zoom);
+
+  // Precompute device-pixel transform for pixel-perfect box drawing.
+  // The combined transform maps CSS coord x → x * s + txDev in device pixels.
+  const s = dpr * zoom;
+  const txDev = canvas.width / 2;
+  const tyDev = canvas.height / 2;
 
   // Only render grid lines and cells that are visible.
+  // Use CSS dimensions (not physical canvas pixels) for screen-space calculations.
   const startOffset = screenToCell(new Vector(0, 0)).subtract(
     new Vector(constants.RENDER_PADDING_CELLS, constants.RENDER_PADDING_CELLS)
   );
-  const endOffset = screenToCell(new Vector(canvas.width, canvas.height)).add(
+  const endOffset = screenToCell(new Vector(cssW, cssH)).add(
     new Vector(constants.RENDER_PADDING_CELLS, constants.RENDER_PADDING_CELLS)
   );
 
@@ -171,23 +209,34 @@ function render(canvas: HTMLCanvasElement) {
       const H = constants.CHAR_PIXELS_V;
       const ox = offset.x;
       const oy = offset.y;
-      // Cell edges (match grid lines exactly)
-      const left   = position.x * W - ox;
-      const right  = (position.x + 1) * W - ox;
-      const top    = (position.y - 1) * H - oy;
-      const bottom = position.y * H - oy;
-      // Cell center
-      const cx = (left + right) / 2;
-      const cy = (top + bottom) / 2;
-      const hw = LINE_W / 2;
+      // Cell edges in CSS (pre-transform) coordinate space
+      const left_css   = position.x * W - ox;
+      const right_css  = (position.x + 1) * W - ox;
+      const top_css    = (position.y - 1) * H - oy;
+      const bottom_css = position.y * H - oy;
+      const cx_css = (left_css + right_css) / 2;
+      const cy_css = (top_css + bottom_css) / 2;
 
+      // Snap to exact device pixels — eliminates anti-aliased edges on any DPR/zoom
+      const dl  = Math.round(left_css * s + txDev);
+      const dr  = Math.round(right_css * s + txDev);
+      const dt  = Math.round(top_css * s + tyDev);
+      const db  = Math.round(bottom_css * s + tyDev);
+      const dcx = Math.round(cx_css * s + txDev);
+      const dcy = Math.round(cy_css * s + tyDev);
+      // Line width in device pixels (at least 1, snapped to integer)
+      const devLW = Math.max(1, Math.round(LINE_W * s));
+      const dhw = Math.floor(devLW / 2);
+
+      // Draw directly in device pixel space, bypassing the canvas transform
+      context.setTransform(1, 0, 0, 1, 0, 0);
       context.fillStyle = colors.text;
-      // Horizontal: centered vertically at cy, from left/cx to cx/right
-      if (dirs & 0b0010) context.fillRect(left, cy - hw, cx - left, LINE_W);     // left
-      if (dirs & 0b0001) context.fillRect(cx, cy - hw, right - cx, LINE_W);      // right
-      // Vertical: centered horizontally at cx, from top/cy to cy/bottom
-      if (dirs & 0b1000) context.fillRect(cx - hw, top, LINE_W, cy - top);       // up
-      if (dirs & 0b0100) context.fillRect(cx - hw, cy, LINE_W, bottom - cy);     // down
+      if (dirs & 0b0010) context.fillRect(dl, dcy - dhw, dcx - dl, devLW);     // left
+      if (dirs & 0b0001) context.fillRect(dcx, dcy - dhw, dr - dcx, devLW);    // right
+      if (dirs & 0b1000) context.fillRect(dcx - dhw, dt, devLW, dcy - dt);     // up
+      if (dirs & 0b0100) context.fillRect(dcx - dhw, dcy, devLW, db - dcy);    // down
+      // Restore the zoom/translate transform for subsequent drawing
+      context.setTransform(s, 0, 0, s, txDev, tyDev);
       return;
     }
 

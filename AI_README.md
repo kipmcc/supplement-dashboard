@@ -325,15 +325,23 @@ Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collabora
 
 ### Features
 - Fullscreen mode button
-- **Supabase persistence** via `supabase-bridge.js` — save/load/delete diagrams
-- ☁️ Diagrams button in top-right opens save/load panel
+- **Supabase persistence** via `supabase-bridge.js` — save/load/rename/duplicate/delete diagrams
+- Sidebar panel replaces native ASCIIFlow File menu with compact file manager
 - Auto-saves every 30 seconds when a diagram is loaded
-- Diagrams stored in `diagrams` table (id, title, content, project_key, created_by)
-- **Version history**: `diagram_versions` table, viewable via 📜 History button, restore any version
+- `diagrams` table: id (uuid), title, content (text), project_key, created_by, tags (jsonb), version_count (int), created_at, updated_at
+- `diagram_versions` table: id, diagram_id (FK), content, saved_by, created_at — each save creates a version snapshot
+- **Sidebar layout**: filter input → scrollable file list → detail bar (project/author/date) → unified toolbar (Save, New, Rename, Duplicate, Delete, Copy)
 - **Markdown export**: 📋 Copy as Markdown — wraps diagram in code block for specs
-- Each save creates a version snapshot for rollback
 - **How-To page**: `asciiflow/how-to.html` — drawing tools, shortcuts, conventions, developer guide
 - 📖 How-To button on the Diagrams tab header links to the guide, AI how-to page
+
+### Direct Supabase API (creating diagrams without the UI)
+```bash
+curl -X POST "$SUPABASE_URL/rest/v1/diagrams" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+  -H "Content-Type: application/json" -H "Prefer: return=representation" \
+  -d '{"title":"My Diagram","content":"┌──┐\n│Hi│\n└──┘","project_key":"myproject","created_by":"claude","tags":[],"version_count":1}'
+```
 
 ### Rebuilding After Source Changes
 ```bash

@@ -147,38 +147,63 @@ function buildPanel(sidebar) {
   const sec = document.createElement('div');
   sec.id = 'af-cloud';
   sec.innerHTML = `<style>
-#af-cloud{padding:8px 16px 12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;color:#333;margin-top:40px}
-#af-cloud .hdr{font-weight:700;font-size:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
-#af-cloud .btn{padding:2px 8px;border-radius:3px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:10px;color:#374151}
-#af-cloud .btn:hover{background:#f3f4f6}
-#af-cloud .btn-b{background:#3b82f6;color:#fff;border-color:#3b82f6}
-#af-cloud .btn-b:hover{background:#2563eb}
-#af-cloud .btn-r{color:#dc2626;border-color:#fca5a5}
-#af-cloud .btn-r:hover{background:#fef2f2}
-#af-cloud .itm{padding:8px 10px;margin-bottom:4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;transition:all .15s}
-#af-cloud .itm:hover{border-color:#3b82f6;background:#eff6ff}
-#af-cloud .itm.on{border-color:#3b82f6;background:#dbeafe}
-#af-cloud .nm{font-weight:600;font-size:13px;display:flex;justify-content:space-between}
-#af-cloud .mt{font-size:11px;color:#9ca3af;margin-top:2px}
-#af-cloud .acts{margin-top:4px;display:flex;gap:4px}
-#af-cloud .sts{font-size:11px;padding:4px 0;text-align:center;min-height:18px}
-#af-cloud .sts.ok{color:#059669}
-#af-cloud .sts.err{color:#dc2626}
-#af-cloud .emp{color:#9ca3af;text-align:center;padding:12px;font-size:12px}
-#af-cloud .flt input{width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:11px;box-sizing:border-box;margin-bottom:8px}
-#af-cloud .act-bar{display:flex;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb}
-#af-cloud .act-bar .btn{flex:1;padding:5px;font-size:11px;text-align:center}
+#af-cloud{padding:8px 12px 10px;font-family:SF Mono,Menlo,Consolas,monospace;font-size:12px;color:#ccc;margin-top:0}
+#af-cloud .btn{padding:3px 8px;border-radius:3px;border:1px solid #555;background:#333;cursor:pointer;font-size:11px;color:#ccc}
+#af-cloud .btn:hover{background:#4a5568;border-color:#666}
+#af-cloud .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+#af-cloud .btn-b{background:#2563eb;color:#fff;border-color:#2563eb}
+#af-cloud .btn-b:hover{background:#1d4ed8}
+#af-cloud .flt input{width:100%;padding:4px 8px;border:1px solid #555;border-radius:3px;font-size:11px;box-sizing:border-box;background:#2d2d2d;color:#ccc;font-family:inherit}
+#af-cloud .flt input::placeholder{color:#777}
+#af-cloud #af-lst{max-height:200px;overflow-y:auto;margin:6px 0;scrollbar-width:thin;scrollbar-color:#555 transparent}
+#af-cloud #af-lst::-webkit-scrollbar{width:5px}
+#af-cloud #af-lst::-webkit-scrollbar-thumb{background:#555;border-radius:3px}
+#af-cloud .itm{padding:4px 8px;border:none;border-radius:3px;cursor:pointer;transition:background .1s;display:flex;justify-content:space-between;align-items:center;background:transparent;color:#ccc;border-left:2px solid transparent;font-size:12px;line-height:1.4}
+#af-cloud .itm:hover{background:#444}
+#af-cloud .itm.on{background:#4a5568;color:#fff;border-left-color:#60a5fa}
+#af-cloud .itm .ver{font-size:10px;color:#777;margin-left:6px;flex-shrink:0}
+#af-cloud .itm.on .ver{color:#93c5fd}
+#af-cloud .detail{padding:6px 8px;font-size:11px;color:#888;border-top:1px solid #444;border-bottom:1px solid #444;margin:4px 0;min-height:14px;line-height:1.5}
+#af-cloud .detail .dl-proj{color:#aaa}
+#af-cloud .detail .dl-date{color:#666}
+#af-cloud .sts{font-size:11px;padding:3px 0;text-align:center;min-height:16px;color:#888}
+#af-cloud .sts.ok{color:#34d399}
+#af-cloud .sts.err{color:#f87171}
+#af-cloud .emp{color:#666;text-align:center;padding:10px;font-size:11px}
+#af-cloud .toolbar{display:flex;gap:4px;align-items:center;padding:4px 0}
+#af-cloud .toolbar .tl{display:flex;gap:4px}
+#af-cloud .toolbar .tr{display:flex;gap:3px;margin-left:auto}
 </style>
-<div class="flt" style="display:flex;gap:4px;align-items:center"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()" style="flex:1"/><button class="btn" onclick="_af.refresh()">↻</button></div>
+<div class="flt" style="display:flex;gap:4px;align-items:center"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()" style="flex:1"/><button class="btn" onclick="_af.refresh()" title="Refresh diagram list">🔄</button></div>
 <div id="af-lst"><div class="emp">Loading...</div></div>
+<div id="af-detail" class="detail"></div>
 <div id="af-sts" class="sts"></div>
-<div class="act-bar">
-  <button class="btn btn-b" onclick="_af.save()">💾 Save</button>
-  <button class="btn" onclick="_af.saveNew()">+ New</button>
-  <button class="btn" onclick="_af.copy()">📋 Copy</button>
+<div class="toolbar">
+  <div class="tl">
+    <button class="btn btn-b" onclick="_af.save()" title="Save current diagram">💾 Save</button>
+    <button class="btn" onclick="_af.saveNew()" title="Create new diagram">+ New</button>
+  </div>
+  <div class="tr">
+    <button id="af-btn-rename" class="btn" onclick="_af.rename()" title="Rename selected diagram" disabled>✏️</button>
+    <button id="af-btn-dup" class="btn" onclick="_af.dup()" title="Duplicate selected diagram" disabled>📑</button>
+    <button id="af-btn-del" class="btn" onclick="_af.del()" title="Delete selected diagram" disabled>🗑</button>
+    <button class="btn" onclick="_af.copy()" title="Copy as markdown to clipboard">📋</button>
+    <button class="btn" onclick="_af.clearCanvas()" title="Clear entire canvas (undoable)">🧹</button>
+  </div>
 </div>
-<div style="padding:6px 0 0;font-size:10px;color:#9ca3af;line-height:1.6">
-  <b style="color:#6b7280">Keys:</b> ⌘Z undo · ⌘⇧Z redo · Space+drag pan · B box · V select · D freeform · A arrow · L line · T text
+<div class="toolbar" style="border-top:1px solid #444;padding-top:6px">
+  <div class="tl">
+    <button class="btn" onclick="_af.zoomOut()" title="Zoom out">−</button>
+    <span id="af-zoom" style="min-width:36px;text-align:center;font-size:11px;color:#888">100%</span>
+    <button class="btn" onclick="_af.zoomIn()" title="Zoom in">+</button>
+  </div>
+  <div class="tr">
+    <button class="btn" onclick="_af.fitContent()" title="Fit diagram to screen">Fit</button>
+    <button class="btn" onclick="_af.topLeft()" title="Reset to origin at 100%">⌂</button>
+  </div>
+</div>
+<div style="padding:4px 0 0;font-size:10px;color:#666;line-height:1.5">
+  <b style="color:#888">Keys:</b> ⌘Z undo · ⌘⇧Z redo · Scroll pan · B box · V select · D freeform · A arrow · L line · T text · E erase
 </div>`;
 
   const ul = sidebar.querySelector('ul.MuiList-root, ul[class*="MuiList"]');
@@ -200,24 +225,42 @@ function buildPanel(sidebar) {
 
 // ===================== List =====================
 
+let _diagrams = []; // cached list for detail lookups
+
 async function refreshList() {
   const el = document.getElementById('af-lst');
   if (!el) return;
   const flt = (document.getElementById('af-flt')?.value||'').trim();
   try {
     const ds = await apiList(flt||null);
-    if (!ds.length) { el.innerHTML = '<div class="emp">No diagrams yet. Draw and 💾 Save!</div>'; return; }
-    el.innerHTML = ds.map(d => `
-      <div class="itm ${d.id===currentId?'on':''}" onclick="_af.load('${d.id}')">
-        <div class="nm"><span>${esc(d.title)}</span><span style="font-size:10px;color:#9ca3af">v${d.version_count||0}</span></div>
-        <div class="mt">${d.project_key?'📁 '+esc(d.project_key):''}${d.created_by?' · '+esc(d.created_by):''} · ${fmt(d.updated_at)}</div>
-        <div class="acts">
-          <button class="btn" onclick="event.stopPropagation();_af.rename('${d.id}','${esc(d.title)}')">✏️</button>
-          <button class="btn" onclick="event.stopPropagation();_af.dup('${d.id}')">📑</button>
-          <button class="btn btn-r" onclick="event.stopPropagation();_af.del('${d.id}')">🗑</button>
-        </div>
-      </div>`).join('');
-  } catch(e) { el.innerHTML = `<div class="emp" style="color:#dc2626">Error: ${e.message}</div>`; }
+    _diagrams = ds;
+    if (!ds.length) { el.innerHTML = '<div class="emp">No diagrams yet. Draw and 💾 Save!</div>'; updateDetail(); return; }
+    el.innerHTML = ds.map(d => {
+      const sel = d.id === currentId;
+      const indicator = sel ? '▸ ' : '  ';
+      return `<div class="itm ${sel?'on':''}" onclick="_af.load('${d.id}')">${indicator}${esc(d.title)}<span class="ver">v${d.version_count||1}</span></div>`;
+    }).join('');
+    updateDetail();
+  } catch(e) { el.innerHTML = `<div class="emp" style="color:#f87171">Error: ${e.message}</div>`; }
+}
+
+// ===================== Detail bar =====================
+
+function updateDetail() {
+  const el = document.getElementById('af-detail');
+  if (!el) return;
+  const hasSel = !!currentId;
+  // Enable/disable toolbar buttons
+  for (const id of ['af-btn-rename','af-btn-dup','af-btn-del']) {
+    const b = document.getElementById(id);
+    if (b) b.disabled = !hasSel;
+  }
+  if (!hasSel) { el.innerHTML = '<span style="color:#555">No file selected</span>'; return; }
+  const d = _diagrams.find(x => x.id === currentId);
+  const proj = (d?.project_key || currentProject) ? `<span class="dl-proj">📁 ${esc(d?.project_key || currentProject)}</span>` : '';
+  const author = d?.created_by ? ` · ${esc(d.created_by)}` : '';
+  const date = d?.updated_at ? `<div class="dl-date">${fmt(d.updated_at)}</div>` : '';
+  el.innerHTML = `<div>${proj}${author}</div>${date}`;
 }
 
 // ===================== Handlers =====================
@@ -263,17 +306,22 @@ async function doSaveNew() {
 }
 
 function doRename(id, cur) {
-  const n = prompt('Rename:', cur||'');
-  if (!n || n === cur) return;
-  apiRename(id, n).then(() => {
-    if (id === currentId) currentTitle = n;
+  const rid = id || currentId;
+  const rcur = cur || currentTitle;
+  if (!rid) return;
+  const n = prompt('Rename:', rcur||'');
+  if (!n || n === rcur) return;
+  apiRename(rid, n).then(() => {
+    if (rid === currentId) currentTitle = n;
     msg(`Renamed to "${n}"`,'ok');
     refreshList();
   });
 }
 
 async function doDup(id) {
-  const d = await apiGet(id);
+  const did = id || currentId;
+  if (!did) return;
+  const d = await apiGet(did);
   if (!d) return;
   await apiSave(null, d.title+' (copy)', d.content, d.project_key, 'dashboard');
   msg(`Duplicated "${d.title}"`,'ok');
@@ -281,9 +329,11 @@ async function doDup(id) {
 }
 
 async function doDel(id) {
+  const did = id || currentId;
+  if (!did) return;
   if (!confirm('Delete this diagram and all versions?')) return;
-  await apiDelete(id);
-  if (currentId === id) { currentId = null; currentTitle = null; currentProject = null; }
+  await apiDelete(did);
+  if (currentId === did) { currentId = null; currentTitle = null; currentProject = null; }
   msg('Deleted','ok');
   refreshList();
 }
@@ -373,6 +423,73 @@ function scrubDiagram(text) {
   return grid.map(r => r.join('').trimEnd()).join('\n');
 }
 
+// ===================== Clear Canvas =====================
+
+function doClearCanvas() {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  if (canvas.committed.size() === 0) { msg('Canvas is empty', 'err'); return; }
+  canvas.clear();
+  msg('Canvas cleared (⌘Z to undo)', 'ok');
+}
+
+// ===================== Zoom Controls =====================
+
+function doZoomIn() {
+  const c = window.__aviflow_store?.currentCanvas;
+  if (!c) return;
+  c.setZoom(Math.min(c.zoom * 1.25, 5));
+  updateZoomDisplay();
+}
+
+function doZoomOut() {
+  const c = window.__aviflow_store?.currentCanvas;
+  if (!c) return;
+  c.setZoom(Math.max(c.zoom / 1.25, 0.2));
+  updateZoomDisplay();
+}
+
+function doFitContent() {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  const keys = canvas.committed.keys();
+  if (!keys.length) { msg('Nothing to fit', 'err'); return; }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const k of keys) {
+    if (k.x < minX) minX = k.x;
+    if (k.y < minY) minY = k.y;
+    if (k.x > maxX) maxX = k.x;
+    if (k.y > maxY) maxY = k.y;
+  }
+
+  const CW = 9, CH = 16, PAD = 40;
+  const contentW = (maxX - minX + 2) * CW;
+  const contentH = (maxY - minY + 2) * CH;
+
+  const sidebarOpen = !document.body.classList.contains('sidebar-collapsed');
+  const sidebarW = sidebarOpen ? 380 : 0;
+  const viewW = document.documentElement.clientWidth - sidebarW;
+  const viewH = document.documentElement.clientHeight;
+
+  const zoom = Math.min((viewW - PAD) / contentW, (viewH - PAD) / contentH, 2);
+
+  const fcx = ((minX + maxX) / 2) * CW;
+  const fcy = ((minY + maxY) / 2) * CH;
+
+  canvas.setZoom(Math.max(zoom, 0.2));
+  canvas.setOffset({ x: fcx - sidebarW / (2 * zoom), y: fcy });
+  updateZoomDisplay();
+}
+
+function updateZoomDisplay() {
+  const el = document.getElementById('af-zoom');
+  const c = window.__aviflow_store?.currentCanvas;
+  if (el && c) el.textContent = Math.round(c.zoom * 100) + '%';
+}
+
+setInterval(updateZoomDisplay, 500);
+
 // ===================== Helpers =====================
 
 function msg(text, type) {
@@ -387,6 +504,7 @@ function fmt(iso) { if(!iso)return''; const d=new Date(iso); return d.toLocaleDa
 
 window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSaveNew,
   rename: doRename, dup: doDup, del: doDel, copy: doCopy, scrub: scrubDiagram,
-  topLeft: topLeftJustify };
+  topLeft: topLeftJustify, clearCanvas: doClearCanvas,
+  zoomIn: doZoomIn, zoomOut: doZoomOut, fitContent: doFitContent };
 
 window.addEventListener('DOMContentLoaded', injectUI);

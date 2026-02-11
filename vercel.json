@@ -1,6 +1,6 @@
 {
-  "routes": [
-    { "src": "/api/auth", "dest": "/api/auth.js" },
-    { "src": "/api/verify", "dest": "/api/verify.js" }
+  "rewrites": [
+    { "source": "/api/auth", "destination": "/api/auth.js" },
+    { "source": "/api/verify", "destination": "/api/verify.js" }
   ]
 }

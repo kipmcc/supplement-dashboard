@@ -88,6 +88,9 @@ export class Controller {
       } else if (event.keyCode === "6".charCodeAt(0)) {
         store.setToolMode(ToolMode.TEXT);
         event.preventDefault();
+      } else if (event.keyCode === "7".charCodeAt(0)) {
+        store.setToolMode(ToolMode.ERASE);
+        event.preventDefault();
       }
     }
     if (event.ctrlKey || event.metaKey) {
@@ -208,12 +211,16 @@ export class DesktopController {
       onMouseUp: this.handleMouseUp,
       onWheel: this.handleWheel,
       onMouseMove: this.handleMouseMove,
+      onAuxClick: (e: React.MouseEvent<any>) => e.preventDefault(),
     };
   }
 
   handleMouseDown = (e: React.MouseEvent<any>) => {
-    // Can drag by holding either the control or meta (Apple) key.
-    if (store.panning.get()) {
+    if (e.button === 1) {
+      // Middle-click drag to pan
+      this.controller.startDrag(Vector.fromMouseEvent(e));
+      e.preventDefault();
+    } else if (store.panning.get()) {
       this.controller.startDrag(Vector.fromMouseEvent(e));
     } else {
       this.controller.startDraw(Vector.fromMouseEvent(e), e);
@@ -229,9 +236,20 @@ export class DesktopController {
   };
 
   handleWheel = (e: React.WheelEvent<any>) => {
-    const delta = -e.deltaY;
-    const newZoom = store.currentCanvas.zoom * (delta > 0 ? 1.1 : 0.9);
-    store.currentCanvas.setZoom(Math.max(Math.min(newZoom, 5), 0.2));
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl/Cmd+scroll → zoom (also handles trackpad pinch where ctrlKey=true)
+      const delta = -e.deltaY;
+      const newZoom = store.currentCanvas.zoom * (delta > 0 ? 1.1 : 0.9);
+      store.currentCanvas.setZoom(Math.max(Math.min(newZoom, 5), 0.2));
+    } else {
+      // Plain scroll → pan
+      const zoom = store.currentCanvas.zoom;
+      const offset = store.currentCanvas.offset;
+      store.currentCanvas.setOffset({
+        x: offset.x + (e.shiftKey ? e.deltaY : e.deltaX) / zoom,
+        y: offset.y + (e.shiftKey ? 0 : e.deltaY) / zoom,
+      });
+    }
   };
 
   handleMouseMove = (e: React.MouseEvent<any>) => {
