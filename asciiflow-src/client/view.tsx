@@ -147,16 +147,12 @@ function render(canvas: HTMLCanvasElement) {
     new Vector(constants.RENDER_PADDING_CELLS, constants.RENDER_PADDING_CELLS)
   );
 
-  startOffset.x = Math.max(
-    0,
-    Math.min(startOffset.x, constants.MAX_GRID_WIDTH)
-  );
-  endOffset.x = Math.max(0, Math.min(endOffset.x, constants.MAX_GRID_WIDTH));
-  startOffset.y = Math.max(
-    0,
-    Math.min(startOffset.y, constants.MAX_GRID_HEIGHT)
-  );
-  endOffset.y = Math.max(0, Math.min(endOffset.y, constants.MAX_GRID_HEIGHT));
+  // Don't clamp start to 0 — grid lines should extend into negative cell
+  // space so the grid covers the full viewport even when offset is small.
+  startOffset.x = Math.min(startOffset.x, constants.MAX_GRID_WIDTH);
+  endOffset.x = Math.min(endOffset.x, constants.MAX_GRID_WIDTH);
+  startOffset.y = Math.min(startOffset.y, constants.MAX_GRID_HEIGHT);
+  endOffset.y = Math.min(endOffset.y, constants.MAX_GRID_HEIGHT);
 
   const colors = getColors();
 
