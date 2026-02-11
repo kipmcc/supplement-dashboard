@@ -1,4 +1,15 @@
 import { layerToText } from "#asciiflow/client/text_utils";
+import { Layer } from "#asciiflow/client/layer";
+import { Vector } from "#asciiflow/client/vector";
+
+const COLOR_NAMES: Record<string, string> = {
+  '#E53E3E': 'red', '#3182CE': 'blue', '#38A169': 'green',
+  '#DD6B20': 'orange', '#805AD5': 'purple',
+};
+const NAME_TO_HEX: Record<string, string> = {
+  'red': '#E53E3E', 'blue': '#3182CE', 'green': '#38A169',
+  'orange': '#DD6B20', 'purple': '#805AD5',
+};
 import { DrawBox } from "#asciiflow/client/draw/box";
 import { DrawFreeform } from "#asciiflow/client/draw/freeform";
 import {
@@ -144,6 +155,8 @@ export class Store {
   public readonly altPressed = watchableValue(false);
 
   public readonly currentCursor = watchableValue("default");
+
+  public readonly currentColor = watchableValue<string | null>(null);
 
   public readonly darkMode = 
     Persistent.json(
@@ -295,5 +308,42 @@ export const store = new Store();
   },
   getText: () => {
     return layerToText(store.currentCanvas.committed);
-  }
+  },
+  // Color API
+  setColor: (color: string | null) => {
+    const hex = color ? (NAME_TO_HEX[color] || color) : null;
+    store.currentColor.set(hex);
+  },
+  getColor: () => store.currentColor.get(),
+  getTextWithColors: () => {
+    const text = layerToText(store.currentCanvas.committed);
+    const colors: Record<string, string> = {};
+    for (const [k, v] of store.currentCanvas.committed.colorMap.entries()) {
+      colors[k] = COLOR_NAMES[v] || v;
+    }
+    return { text, colors };
+  },
+  applyColors: (colorMap: Record<string, string>) => {
+    const canvas = store.currentCanvas;
+    for (const [posKey, color] of Object.entries(colorMap)) {
+      const hex = NAME_TO_HEX[color] || color;
+      canvas.committed.colorMap.set(posKey, hex);
+    }
+  },
+  recolorRegion: (x1: number, y1: number, x2: number, y2: number, color: string) => {
+    const canvas = store.currentCanvas;
+    const hex = NAME_TO_HEX[color] || color;
+    const scratch = new Layer();
+    for (const [pos, val] of canvas.committed.entries()) {
+      if (pos.x >= x1 && pos.x <= x2 && pos.y >= y1 && pos.y <= y2) {
+        scratch.set(pos, val);
+        scratch.colorMap.set(pos.toString(), hex);
+      }
+    }
+    canvas.setScratchLayer(scratch);
+    canvas.commitScratch();
+  },
+  // Row operations
+  insertRow: (y: number) => { store.currentCanvas.insertRowAtY(y); },
+  deleteRow: (y: number) => { store.currentCanvas.deleteRowAtY(y); },
 };

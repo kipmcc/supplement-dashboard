@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 22:20 CST by Maureen*
+*Last updated: 2026-02-11 by Kip — added color API and row operations (AviFlow v0.9.2)*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -19,11 +19,10 @@
 | Tab | Purpose | Key Tables |
 |-----|---------|------------|
 | **Dashboard** | DB stats, gap tracking, metrics | `canonical_products`, `metrics_history` |
-| **Projects** | High-level project tracking | `projects` |
+| **Projects** | High-level project tracking | `task_queue` (where `is_project=true`) |
 | **Tasks** | Granular task queue + ongoing processes | `task_queue`, `ongoing_tasks` |
-| **Mobile** | Mobile app MVP tracking | (static) |
-| **Content** | Research articles pipeline | `longevity_content`, `public_articles` |
-| **Diagrams** | ASCIIFlow editor — architecture, flows, specs | localStorage (Supabase planned) |
+| **Pipeline** | Product pipeline & processing status | `canonical_products`, `product_sources` |
+| **Diagrams** | AviFlow editor (navigates to `/asciiflow/`) | `diagrams`, `diagram_versions` |
 
 ### Tasks Tab — Sub-Tabs
 The Tasks tab has four filter views:
@@ -55,16 +54,15 @@ A **project** is a significant body of work that spans multiple tasks and days/w
 
 ### Project Tracking: Two Systems
 
-**1. Supabase `projects` table** — Dashboard display
+**1. Supabase `task_queue` table (where `is_project=true`)** — Dashboard display
+Projects are stored as rows in `task_queue` with `is_project=true`, not in a separate table.
 | Column | Purpose |
 |--------|---------|
-| `slug` | Unique identifier (e.g., "mobile-app") |
-| `name` | Display name |
+| `project_key` | Unique identifier (e.g., "mobile-app") |
+| `title` | Display name |
 | `status` | planning, research, active, paused, complete |
-| `priority` | critical, high, medium, low |
-| `local_path` | Path to local project folder |
+| `priority` | 1 (critical), 2 (high), 3 (medium), 4 (low) |
 | `owner` | jeff, maureen, kip |
-| `target_date` | When we aim to complete |
 
 **2. Local `projects/` directory** — Detailed working notes
 ```
@@ -123,8 +121,8 @@ planning → research → active → complete → _archive/
 
 1. **Add to Supabase:**
 ```sql
-INSERT INTO projects (slug, name, status, priority, local_path, owner)
-VALUES ('my-project', 'My New Project', 'planning', 'medium', 'projects/my-project', 'jeff');
+INSERT INTO task_queue (task_key, title, status, priority, owner, is_project, project_key)
+VALUES ('my-project', 'My New Project', 'planning', 3, 'jeff', true, 'my-project');
 ```
 
 2. **Create local folder:**
@@ -141,7 +139,7 @@ echo "# My Project - Status\n\n**Last Updated:** $(date)\n\n## Current State\n�
 ```bash
 mv projects/my-project projects/_archive/
 ```
-Update Supabase status to `complete`.
+Update task_queue status to `complete` (where `is_project=true` and matching `project_key`).
 
 ---
 
@@ -315,13 +313,13 @@ Finds and downloads verified product images from multiple sources.
 
 **Added:** 2026-02-10 by Maureen
 
-Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collaboration.
+Self-hosted ASCIIFlow (branded "AviFlow") for architecture diagrams, flow design, and spec collaboration. Supabase-backed persistence with colored text support (v0.9.2).
 
 ### Files
-- `asciiflow/` — Built bundle + assets (served statically via iframe)
+- `asciiflow/` — Built bundle + static overrides (served via iframe from main dashboard, direct nav from tab)
 - `asciiflow-src/` — Full TypeScript source for modifications
-- Build: `cd asciiflow-src && npm install && npx webpack --config webpack.prod.config.cjs`
-- Copy output: `cp dist/* ../asciiflow/`
+- Build: `cd asciiflow-src && npx webpack --config webpack.prod.config.cjs`
+- Copy output: `cp dist/asciiflow.bundle.js ../asciiflow/` (do NOT copy dist/index.html — asciiflow/index.html has custom CSS overrides)
 
 ### Features
 - Fullscreen mode button
@@ -332,8 +330,7 @@ Self-hosted ASCIIFlow for architecture diagrams, flow design, and spec collabora
 - `diagram_versions` table: id, diagram_id (FK), content, saved_by, created_at — each save creates a version snapshot
 - **Sidebar layout**: filter input → scrollable file list → detail bar (project/author/date) → unified toolbar (Save, New, Rename, Duplicate, Delete, Copy)
 - **Markdown export**: 📋 Copy as Markdown — wraps diagram in code block for specs
-- **How-To page**: `asciiflow/how-to.html` — drawing tools, shortcuts, conventions, developer guide
-- 📖 How-To button on the Diagrams tab header links to the guide, AI how-to page
+- **AviFlow Guide**: `asciiflow/AVIFLOW_GUIDE.md` — drawing tools, shortcuts, conventions, developer guide
 
 ### Direct Supabase API (creating diagrams without the UI)
 ```bash
@@ -348,8 +345,8 @@ curl -X POST "$SUPABASE_URL/rest/v1/diagrams" \
 cd asciiflow-src
 npm install           # first time only
 npx webpack --config webpack.prod.config.cjs
-cp dist/asciiflow.bundle.js ../asciiflow/
-cp dist/index.html ../asciiflow/
+cp dist/asciiflow.bundle.js ../asciiflow/asciiflow.bundle.js
+# Do NOT copy dist/index.html — asciiflow/index.html has custom CSS/HTML overrides
 ```
 
 ### Creating Diagrams Programmatically (AI Agents)
@@ -358,12 +355,26 @@ See **`asciiflow/AVIFLOW_GUIDE.md`** for the full guide. Key points:
 
 **Browser API:**
 ```javascript
+// Core
 window.__aviflow_api.loadText(diagramString);  // Load text into canvas
 window.__aviflow_api.getText();                 // Read canvas content
 _af.load('diagram-uuid');                       // Load from Supabase
 _af.topLeft();                                  // Position viewport
 _af.refresh();                                  // Refresh sidebar list
+
+// Color — agents can mark changes visually
+window.__aviflow_api.setColor('red');           // Set active drawing color (red|blue|green|orange|purple|null)
+window.__aviflow_api.getColor();                // Get current active color (hex or null)
+window.__aviflow_api.getTextWithColors();        // → { text: "...", colors: { "5:10": "red", ... } }
+window.__aviflow_api.applyColors({ "5:10": "red", "6:10": "blue" });  // Bulk-set colors by position key
+window.__aviflow_api.recolorRegion(x1, y1, x2, y2, 'blue');           // Recolor a bounding box
+
+// Row operations (undoable)
+window.__aviflow_api.insertRow(y);              // Insert blank row at Y, shift content down
+window.__aviflow_api.deleteRow(y);              // Delete row at Y, shift content up
 ```
+
+**Color persistence:** When colors are present, diagram content is stored as `{"text":"...","colors":{"x:y":"#hex",...}}`. Old plain-text diagrams load normally (no colors). Position keys use `x:y` format matching Vector.toString().
 
 **Direct Supabase API (preferred for automation — no prompts):**
 ```bash

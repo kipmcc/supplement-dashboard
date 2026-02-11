@@ -13,12 +13,13 @@ interface ILayerJSON {
   x: number;
   y: number;
   text: string;
+  colors?: Record<string, string>;
 }
 export class Layer implements ILayerView {
   public static serialize(value: Layer) {
     // Most efficient format seems to be to just store the drawing as plain text with an offset.
-    return JSON.stringify({
-      version: 2,
+    const obj: ILayerJSON = {
+      version: 3,
       x: value
         .entries()
         .reduce((acc, [key]) => Math.min(acc, key.x), Number.MAX_SAFE_INTEGER),
@@ -26,7 +27,11 @@ export class Layer implements ILayerView {
         .entries()
         .reduce((acc, [key]) => Math.min(acc, key.y), Number.MAX_SAFE_INTEGER),
       text: layerToText(value),
-    } as ILayerJSON);
+    };
+    if (value.colorMap.size > 0) {
+      obj.colors = Object.fromEntries(value.colorMap.entries());
+    }
+    return JSON.stringify(obj);
   }
 
   public static deserialize(value: string) {
@@ -40,13 +45,20 @@ export class Layer implements ILayerView {
       fixedLayer.setFrom(legacyRenderedLayer);
       return fixedLayer;
     }
-    return textToLayer(object.text, new Vector(object.x, object.y));
+    const layer = textToLayer(object.text, new Vector(object.x, object.y));
+    if (object.colors) {
+      for (const [key, color] of Object.entries(object.colors)) {
+        layer.colorMap.set(key, color as string);
+      }
+    }
+    return layer;
   }
 
   public entries() {
     return this.keys().map((key) => [key, this.get(key)] as [Vector, string]);
   }
   public map = new Map<string, string>();
+  public colorMap = new Map<string, string>(); // position key → hex color
 
   public delete(position?: Vector) {
     this.map.delete(position.toString());
@@ -54,6 +66,7 @@ export class Layer implements ILayerView {
 
   public clear() {
     this.map.clear();
+    this.colorMap.clear();
   }
 
   public set(position: Vector, value: string) {
@@ -63,6 +76,11 @@ export class Layer implements ILayerView {
   public setFrom(layer: ILayerView) {
     for (const [key, value] of layer.entries()) {
       this.set(key, value);
+    }
+    if (layer instanceof Layer && layer.colorMap.size > 0) {
+      for (const [k, v] of layer.colorMap.entries()) {
+        this.colorMap.set(k, v);
+      }
     }
   }
 
@@ -89,17 +107,29 @@ export class Layer implements ILayerView {
   public apply(otherLayer: Layer): [Layer, Layer] {
     const newLayer = new Layer();
     newLayer.map = new Map(this.map.entries());
+    newLayer.colorMap = new Map(this.colorMap.entries());
     const undoLayer = new Layer();
     Array.from(otherLayer.map.entries()).forEach(([key, newValue]) => {
       const oldValue = this.map.get(key);
       // Spaces and empty strings are deletion characters.
       if (newValue === "" || newValue === " ") {
         newLayer.map.delete(key);
+        newLayer.colorMap.delete(key);
       } else {
         newLayer.map.set(key, newValue);
+        // Apply new color from scratch, or preserve existing
+        if (otherLayer.colorMap.has(key)) {
+          const nc = otherLayer.colorMap.get(key);
+          if (nc !== "" && nc != null) newLayer.colorMap.set(key, nc);
+          else newLayer.colorMap.delete(key); // "" marker means "was uncolored"
+        }
       }
       if (oldValue !== newValue) {
         undoLayer.map.set(key, !!oldValue ? oldValue : "");
+        // Capture old color for undo
+        const oldColor = this.colorMap.get(key) || null;
+        if (oldColor) undoLayer.colorMap.set(key, oldColor);
+        else undoLayer.colorMap.set(key, "");
       }
     });
     return [newLayer, undoLayer];

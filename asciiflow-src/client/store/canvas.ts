@@ -131,7 +131,17 @@ export class CanvasStore {
    * Ends the current draw, commiting anything currently drawn on the scratch layer.
    */
   commitScratch() {
-    const [newLayer, undoLayer] = this.committed.apply(this.scratch.get());
+    const scratch = this.scratch.get();
+    // Auto-apply active color to all scratch cells
+    const currentColor = (window as any).__aviflow_store?.currentColor?.get?.();
+    if (currentColor) {
+      for (const [key, val] of scratch.map.entries()) {
+        if (val && val !== "" && val !== " ") {
+          scratch.colorMap.set(key, currentColor);
+        }
+      }
+    }
+    const [newLayer, undoLayer] = this.committed.apply(scratch);
     this.committed = newLayer;
     if (undoLayer.size() > 0) {
       // Don't push a no-op to the undo stack.
@@ -170,5 +180,47 @@ export class CanvasStore {
     this.committed = newLayer;
     this.undoLayers.set([...this.undoLayers.get(), undoLayer]);
     this.redoLayers.set(this.redoLayers.get().slice(0, -1));
+  }
+
+  /**
+   * Insert a blank row at the given Y, shifting all content at Y >= insertY down by 1.
+   */
+  insertRowAtY(insertY: number) {
+    const scratch = new Layer();
+    for (const [pos, val] of this.committed.entries()) {
+      if (pos.y >= insertY) {
+        scratch.set(pos, ""); // clear original
+        const newPos = new Vector(pos.x, pos.y + 1);
+        scratch.set(newPos, val); // set shifted
+        const ck = pos.toString();
+        if (this.committed.colorMap.has(ck)) {
+          scratch.colorMap.set(newPos.toString(), this.committed.colorMap.get(ck));
+        }
+      }
+    }
+    this.setScratchLayer(scratch);
+    this.commitScratch();
+  }
+
+  /**
+   * Delete the row at the given Y, shifting all content at Y > deleteY up by 1.
+   */
+  deleteRowAtY(deleteY: number) {
+    const scratch = new Layer();
+    for (const [pos, val] of this.committed.entries()) {
+      if (pos.y >= deleteY) {
+        scratch.set(pos, ""); // clear original
+        if (pos.y > deleteY) {
+          const newPos = new Vector(pos.x, pos.y - 1);
+          scratch.set(newPos, val); // shift up
+          const ck = pos.toString();
+          if (this.committed.colorMap.has(ck)) {
+            scratch.colorMap.set(newPos.toString(), this.committed.colorMap.get(ck));
+          }
+        }
+      }
+    }
+    this.setScratchLayer(scratch);
+    this.commitScratch();
   }
 }

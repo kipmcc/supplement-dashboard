@@ -68,6 +68,19 @@ export class Controller {
     // Override some special characters so that they can be handled in one place.
     let specialKeyCode = null;
 
+    // Single-letter tool shortcuts (skip when in text mode or using modifiers)
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+        && store.toolMode() !== ToolMode.TEXT) {
+      const key = event.key?.toLowerCase();
+      if (key === 'b') { store.setToolMode(ToolMode.BOX); event.preventDefault(); }
+      else if (key === 'v') { store.setToolMode(ToolMode.SELECT); event.preventDefault(); }
+      else if (key === 'd') { store.setToolMode(ToolMode.FREEFORM); event.preventDefault(); }
+      else if (key === 'a') { store.setToolMode(ToolMode.ARROWS); event.preventDefault(); }
+      else if (key === 'l') { store.setToolMode(ToolMode.LINES); event.preventDefault(); }
+      else if (key === 't') { store.setToolMode(ToolMode.TEXT); event.preventDefault(); }
+      else if (key === 'e') { store.setToolMode(ToolMode.ERASE); event.preventDefault(); }
+    }
+
     if (event.altKey) {
       store.altPressed.set(true);
       if (event.keyCode === "1".charCodeAt(0)) {

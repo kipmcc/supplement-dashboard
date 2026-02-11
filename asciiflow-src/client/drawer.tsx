@@ -243,6 +243,7 @@ export function Drawer() {
                     tool={ToolMode.BOX}
                     icon={<Square size={20} />}
                   >
+                    <ShortcutChip label="b" />
                     <ShortcutChip label={"alt + 1"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
@@ -250,6 +251,7 @@ export function Drawer() {
                     tool={ToolMode.SELECT}
                     icon={<MousePointer2 size={20} />}
                   >
+                    <ShortcutChip label="v" />
                     <ShortcutChip label={"alt + 2"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
@@ -258,6 +260,7 @@ export function Drawer() {
                     icon={<PenTool size={20} />}
                   >
                     <ListItemSecondaryAction>
+                      <ShortcutChip label="d" />
                       <ShortcutChip label={"alt + 3"} hideUntilAlt={true} />
                       <FreeFormCharacterSelect />
                     </ListItemSecondaryAction>
@@ -267,6 +270,7 @@ export function Drawer() {
                     tool={ToolMode.ARROWS}
                     icon={<ArrowUpRight size={20} />}
                   >
+                    <ShortcutChip label="a" />
                     <ShortcutChip label={"alt + 4"} hideUntilAlt={true} />
                   </ToolControl>
 
@@ -275,6 +279,7 @@ export function Drawer() {
                     tool={ToolMode.LINES}
                     icon={<Minus size={20} />}
                   >
+                    <ShortcutChip label="l" />
                     <ShortcutChip label={"alt + 5"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
@@ -282,6 +287,7 @@ export function Drawer() {
                     tool={ToolMode.TEXT}
                     icon={<Type size={20} />}
                   >
+                    <ShortcutChip label="t" />
                     <ShortcutChip label={"alt + 6"} hideUntilAlt={true} />
                   </ToolControl>
                   <ToolControl
@@ -289,6 +295,7 @@ export function Drawer() {
                     tool={ToolMode.ERASE}
                     icon={<Eraser size={20} />}
                   >
+                    <ShortcutChip label="e" />
                     <ShortcutChip label={"alt + 7"} hideUntilAlt={true} />
                   </ToolControl>
                 </>

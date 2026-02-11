@@ -6,6 +6,11 @@
 
 const SUPABASE_URL = 'https://xijsvdhffiuxpepswnyb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpanN2ZGhmZml1eHBlcHN3bnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNzU0NTYsImV4cCI6MjA4MTc1MTQ1Nn0.Y5igqaP-p4ZvvVP47xvy4SFCyZE030wyuITYIUwWlRI';
+
+const COLOR_NAMES = {
+  '#E53E3E': 'red', '#3182CE': 'blue', '#38A169': 'green',
+  '#DD6B20': 'orange', '#805AD5': 'purple',
+};
 const API = `${SUPABASE_URL}/rest/v1`;
 const HEADERS = {
   'apikey': SUPABASE_ANON_KEY,
@@ -173,6 +178,8 @@ function buildPanel(sidebar) {
 #af-cloud .toolbar{display:flex;gap:4px;align-items:center;padding:2px 0}
 #af-cloud .toolbar .tl{display:flex;gap:4px}
 #af-cloud .toolbar .tr{display:flex;gap:3px;margin-left:auto}
+#af-cloud .cbtn{background:none;border:1px solid transparent;border-radius:50%;cursor:pointer;font-size:14px;padding:2px 4px;color:#ccc}
+#af-cloud .cbtn.active{border-color:#fff;background:rgba(255,255,255,0.15)}
 </style>
 <div class="flt" style="display:flex;gap:4px;align-items:center"><input id="af-flt" placeholder="Filter by project..." oninput="_af.refresh()" style="flex:1"/><button class="btn" onclick="_af.refresh()" title="Refresh diagram list">🔄</button></div>
 <div id="af-lst"><div class="emp">Loading...</div></div>
@@ -203,8 +210,23 @@ function buildPanel(sidebar) {
     <button class="btn" onclick="_af.topLeft()" title="Reset to origin at 100%">⌂</button>
   </div>
 </div>
+<div class="toolbar" style="border-top:1px solid #444;padding-top:3px">
+  <div class="tl" style="gap:4px;align-items:center">
+    <span style="font-size:10px;color:#888">Color:</span>
+    <button class="cbtn active" data-color="" onclick="_af.setColor(this)" title="Default">\u2B24</button>
+    <button class="cbtn" data-color="#E53E3E" onclick="_af.setColor(this)" title="Red" style="color:#E53E3E">\u2B24</button>
+    <button class="cbtn" data-color="#3182CE" onclick="_af.setColor(this)" title="Blue" style="color:#3182CE">\u2B24</button>
+    <button class="cbtn" data-color="#38A169" onclick="_af.setColor(this)" title="Green" style="color:#38A169">\u2B24</button>
+    <button class="cbtn" data-color="#DD6B20" onclick="_af.setColor(this)" title="Orange" style="color:#DD6B20">\u2B24</button>
+    <button class="cbtn" data-color="#805AD5" onclick="_af.setColor(this)" title="Purple" style="color:#805AD5">\u2B24</button>
+  </div>
+  <div class="tr">
+    <button class="btn" onclick="_af.insertRow()" title="Insert blank row (shift down)">\u25BC+</button>
+    <button class="btn" onclick="_af.deleteRow()" title="Delete row (shift up)">\u25B2\u2212</button>
+  </div>
+</div>
 <div style="padding:2px 0 0;font-size:10px;color:#666;line-height:1.3">
-  <b style="color:#888">Keys:</b> ⌘Z undo · ⌘⇧Z redo · Scroll pan · B box · V select · D freeform · A arrow · L line · T text · E erase
+  <b style="color:#888">Keys:</b> \u2318Z undo \u00B7 \u2318\u21E7Z redo \u00B7 Scroll pan \u00B7 B box \u00B7 V select \u00B7 D freeform \u00B7 A arrow \u00B7 L line \u00B7 T text \u00B7 E erase
 </div>`;
 
   const ul = sidebar.querySelector('ul.MuiList-root, ul[class*="MuiList"]');
@@ -269,7 +291,26 @@ function updateDetail() {
 async function doLoad(id) {
   const d = await apiGet(id);
   if (!d) { msg('Not found','err'); return; }
-  if (!loadToCanvas(d.content)) { msg('Canvas API not ready — try refreshing','err'); return; }
+  // Parse content — may be JSON with colors or plain text
+  let text, colors;
+  try {
+    const parsed = JSON.parse(d.content);
+    if (parsed.text !== undefined) {
+      text = parsed.text;
+      colors = parsed.colors || {};
+    } else {
+      text = d.content;
+      colors = {};
+    }
+  } catch { text = d.content; colors = {}; }
+  if (!loadToCanvas(text)) { msg('Canvas API not ready — try refreshing','err'); return; }
+  // Apply colors
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (canvas && colors && Object.keys(colors).length > 0) {
+    for (const [k, v] of Object.entries(colors)) {
+      canvas.committed.colorMap.set(k, v);
+    }
+  }
   currentId = d.id;
   currentTitle = d.title;
   currentProject = d.project_key || null;
@@ -288,12 +329,23 @@ async function doSave() {
     title = prompt('Diagram title:', 'Untitled') || 'Untitled';
     proj = prompt('Project key (optional):', '') || null;
   }
-  const r = await apiSave(currentId, title, ascii, proj, 'dashboard');
+  // Get color data from committed layer
+  const canvas = window.__aviflow_store?.currentCanvas;
+  const colors = {};
+  if (canvas?.committed?.colorMap?.size > 0) {
+    for (const [k, v] of canvas.committed.colorMap.entries()) {
+      colors[k] = v;
+    }
+  }
+  const content = Object.keys(colors).length > 0
+    ? JSON.stringify({ text: ascii, colors })
+    : ascii; // Keep plain text if no colors (backward compat)
+  const r = await apiSave(currentId, title, content, proj, 'dashboard');
   if (Array.isArray(r) && r[0]) {
     currentId = r[0].id;
     currentTitle = r[0].title;
     currentProject = r[0].project_key || null;
-    lastSaved = ascii;
+    lastSaved = content;
   }
   msg(`Saved "${title}"`,'ok');
   refreshList();
@@ -355,10 +407,22 @@ function doCopy() {
 setInterval(() => {
   if (!currentId) return;
   const ascii = readFromCanvas();
-  if (ascii && ascii !== lastSaved) {
+  if (!ascii) return;
+  // Build content with colors
+  const canvas = window.__aviflow_store?.currentCanvas;
+  const colors = {};
+  if (canvas?.committed?.colorMap?.size > 0) {
+    for (const [k, v] of canvas.committed.colorMap.entries()) {
+      colors[k] = v;
+    }
+  }
+  const content = Object.keys(colors).length > 0
+    ? JSON.stringify({ text: ascii, colors })
+    : ascii;
+  if (content !== lastSaved) {
     const title = currentTitle || 'Untitled';
     const proj = currentProject;
-    apiSave(currentId, title, ascii, proj, 'dashboard').then(() => { lastSaved = ascii; msg('Auto-saved','ok'); }).catch(()=>{});
+    apiSave(currentId, title, content, proj, 'dashboard').then(() => { lastSaved = content; msg('Auto-saved','ok'); }).catch(()=>{});
   }
 }, 30000);
 
@@ -426,6 +490,28 @@ function scrubDiagram(text) {
 
   // Rebuild text, trim trailing spaces
   return grid.map(r => r.join('').trimEnd()).join('\n');
+}
+
+function doScrub() {
+  const ascii = readFromCanvas();
+  if (!ascii) { msg('Nothing to scrub', 'err'); return; }
+  // Preserve colors before scrub
+  const canvas = window.__aviflow_store?.currentCanvas;
+  const savedColors = {};
+  if (canvas?.committed?.colorMap?.size > 0) {
+    for (const [k, v] of canvas.committed.colorMap.entries()) {
+      savedColors[k] = v;
+    }
+  }
+  const scrubbed = scrubDiagram(ascii);
+  loadToCanvas(scrubbed);
+  // Re-apply colors
+  if (canvas && Object.keys(savedColors).length > 0) {
+    for (const [k, v] of Object.entries(savedColors)) {
+      canvas.committed.colorMap.set(k, v);
+    }
+  }
+  msg('Diagram scrubbed (colors preserved)', 'ok');
 }
 
 // ===================== Clear Canvas =====================
@@ -530,12 +616,65 @@ function msg(text, type) {
 function esc(s) { return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'):''; }
 function fmt(iso) { if(!iso)return''; const d=new Date(iso); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 
+// ===================== Color Palette =====================
+
+function doSetColor(btn) {
+  document.querySelectorAll('#af-cloud .cbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const color = btn.dataset.color || null;
+  window.__aviflow_api?.setColor(color);
+
+  // If there's an active selection, recolor those cells immediately
+  const canvas = window.__aviflow_store?.currentCanvas;
+  const sel = canvas?.selection?.get?.();
+  if (sel && color) {
+    const tl = sel.topLeft();
+    const br = sel.bottomRight();
+    window.__aviflow_api.recolorRegion(tl.x, tl.y, br.x, br.y, color);
+    msg('Recolored selection \u2192 ' + (COLOR_NAMES[color] || 'default'), 'ok');
+  }
+}
+
+// ===================== Insert / Delete Row =====================
+
+function doInsertRow() {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  const sel = canvas.selection.get();
+  let y;
+  if (sel) {
+    y = sel.topLeft().y;
+  } else {
+    // Use viewport center Y
+    const offset = canvas.offset;
+    y = Math.round(offset.y / 16);
+  }
+  window.__aviflow_api.insertRow(y);
+  msg('Row inserted at Y=' + y + ' (\u2318Z to undo)', 'ok');
+}
+
+function doDeleteRow() {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  const sel = canvas.selection.get();
+  let y;
+  if (sel) {
+    y = sel.topLeft().y;
+  } else {
+    const offset = canvas.offset;
+    y = Math.round(offset.y / 16);
+  }
+  window.__aviflow_api.deleteRow(y);
+  msg('Row deleted at Y=' + y + ' (\u2318Z to undo)', 'ok');
+}
+
 // ===================== Init =====================
 
 window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSaveNew,
-  rename: doRename, dup: doDup, del: doDel, copy: doCopy, scrub: scrubDiagram,
+  rename: doRename, dup: doDup, del: doDel, copy: doCopy, scrub: doScrub,
   topLeft: topLeftJustify, clearCanvas: doClearCanvas,
   zoomIn: doZoomIn, zoomOut: doZoomOut, fitContent: doFitContent,
-  centerContent: doCenterContent };
+  centerContent: doCenterContent,
+  setColor: doSetColor, insertRow: doInsertRow, deleteRow: doDeleteRow };
 
 window.addEventListener('DOMContentLoaded', injectUI);

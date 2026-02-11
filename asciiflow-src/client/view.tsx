@@ -199,8 +199,12 @@ function render(canvas: HTMLCanvasElement) {
   };
   const LINE_W = 1.5; // line thickness
 
-  function text(position: Vector, value: string) {
+  function text(position: Vector, value: string, layer?: { colorMap?: Map<string, string> }, previewColor?: string) {
     if (value === null || value === "" || value === " ") return;
+
+    // Check for cell color
+    const posKey = position.toString();
+    const cellColor = layer?.colorMap?.get(posKey) || previewColor || null;
 
     const dirs = BOX_DIRS[value];
     if (dirs !== undefined) {
@@ -229,7 +233,7 @@ function render(canvas: HTMLCanvasElement) {
 
       // Draw directly in device pixel space, bypassing the canvas transform
       context.setTransform(1, 0, 0, 1, 0, 0);
-      context.fillStyle = colors.text;
+      context.fillStyle = cellColor || colors.text;
       if (dirs & 0b0010) context.fillRect(dl, dcy - dhw, dcx - dl, devLW);     // left
       if (dirs & 0b0001) context.fillRect(dcx, dcy - dhw, dr - dcx, devLW);    // right
       if (dirs & 0b1000) context.fillRect(dcx - dhw, dt, devLW, dcy - dt);     // up
@@ -239,7 +243,7 @@ function render(canvas: HTMLCanvasElement) {
       return;
     }
 
-    context.fillStyle = colors.text;
+    context.fillStyle = cellColor || colors.text;
     context.fillText(
       value,
       position.x * constants.CHAR_PIXELS_H - offset.x,
@@ -258,13 +262,14 @@ function render(canvas: HTMLCanvasElement) {
     }
   }
   for (const [position, value] of committed.entries()) {
-    const cellValue = committed.get(position);
-    text(position, cellValue);
+    text(position, value, committed);
   }
+  // Preview color for scratch cells
+  const previewColor = store.currentColor?.get();
   for (const [position] of scratch.entries()) {
     highlight(position, colors.highlight);
     const cellValue = scratch.get(position);
-    text(position, cellValue);
+    text(position, cellValue, scratch, previewColor);
   }
 
   if (!!selection) {
