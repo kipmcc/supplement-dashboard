@@ -147,7 +147,7 @@ function buildPanel(sidebar) {
   const sec = document.createElement('div');
   sec.id = 'af-cloud';
   sec.innerHTML = `<style>
-#af-cloud{padding:8px 12px 10px;font-family:SF Mono,Menlo,Consolas,monospace;font-size:12px;color:#ccc;margin-top:0}
+#af-cloud{padding:4px 12px 6px;font-family:SF Mono,Menlo,Consolas,monospace;font-size:12px;color:#ccc;margin-top:0}
 #af-cloud .btn{padding:3px 8px;border-radius:3px;border:1px solid #555;background:#333;cursor:pointer;font-size:11px;color:#ccc}
 #af-cloud .btn:hover{background:#4a5568;border-color:#666}
 #af-cloud .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
@@ -155,7 +155,7 @@ function buildPanel(sidebar) {
 #af-cloud .btn-b:hover{background:#1d4ed8}
 #af-cloud .flt input{width:100%;padding:4px 8px;border:1px solid #555;border-radius:3px;font-size:11px;box-sizing:border-box;background:#2d2d2d;color:#ccc;font-family:inherit}
 #af-cloud .flt input::placeholder{color:#777}
-#af-cloud #af-lst{max-height:200px;overflow-y:auto;margin:6px 0;scrollbar-width:thin;scrollbar-color:#555 transparent}
+#af-cloud #af-lst{max-height:150px;overflow-y:auto;margin:4px 0;scrollbar-width:thin;scrollbar-color:#555 transparent}
 #af-cloud #af-lst::-webkit-scrollbar{width:5px}
 #af-cloud #af-lst::-webkit-scrollbar-thumb{background:#555;border-radius:3px}
 #af-cloud .itm{padding:4px 8px;border:none;border-radius:3px;cursor:pointer;transition:background .1s;display:flex;justify-content:space-between;align-items:center;background:transparent;color:#ccc;border-left:2px solid transparent;font-size:12px;line-height:1.4}
@@ -163,14 +163,14 @@ function buildPanel(sidebar) {
 #af-cloud .itm.on{background:#4a5568;color:#fff;border-left-color:#60a5fa}
 #af-cloud .itm .ver{font-size:10px;color:#777;margin-left:6px;flex-shrink:0}
 #af-cloud .itm.on .ver{color:#93c5fd}
-#af-cloud .detail{padding:6px 8px;font-size:11px;color:#888;border-top:1px solid #444;border-bottom:1px solid #444;margin:4px 0;min-height:14px;line-height:1.5}
+#af-cloud .detail{padding:3px 8px;font-size:11px;color:#888;border-top:1px solid #444;border-bottom:1px solid #444;margin:2px 0;min-height:14px;line-height:1.4}
 #af-cloud .detail .dl-proj{color:#aaa}
 #af-cloud .detail .dl-date{color:#666}
-#af-cloud .sts{font-size:11px;padding:3px 0;text-align:center;min-height:16px;color:#888}
+#af-cloud .sts{font-size:11px;padding:1px 0;text-align:center;min-height:14px;color:#888}
 #af-cloud .sts.ok{color:#34d399}
 #af-cloud .sts.err{color:#f87171}
 #af-cloud .emp{color:#666;text-align:center;padding:10px;font-size:11px}
-#af-cloud .toolbar{display:flex;gap:4px;align-items:center;padding:4px 0}
+#af-cloud .toolbar{display:flex;gap:4px;align-items:center;padding:2px 0}
 #af-cloud .toolbar .tl{display:flex;gap:4px}
 #af-cloud .toolbar .tr{display:flex;gap:3px;margin-left:auto}
 </style>
@@ -191,7 +191,7 @@ function buildPanel(sidebar) {
     <button class="btn" onclick="_af.clearCanvas()" title="Clear entire canvas (undoable)">🧹</button>
   </div>
 </div>
-<div class="toolbar" style="border-top:1px solid #444;padding-top:6px">
+<div class="toolbar" style="border-top:1px solid #444;padding-top:3px">
   <div class="tl">
     <button class="btn" onclick="_af.zoomOut()" title="Zoom out">−</button>
     <span id="af-zoom" style="min-width:36px;text-align:center;font-size:11px;color:#888">100%</span>
@@ -202,7 +202,7 @@ function buildPanel(sidebar) {
     <button class="btn" onclick="_af.topLeft()" title="Reset to origin at 100%">⌂</button>
   </div>
 </div>
-<div style="padding:4px 0 0;font-size:10px;color:#666;line-height:1.5">
+<div style="padding:2px 0 0;font-size:10px;color:#666;line-height:1.3">
   <b style="color:#888">Keys:</b> ⌘Z undo · ⌘⇧Z redo · Scroll pan · B box · V select · D freeform · A arrow · L line · T text · E erase
 </div>`;
 
@@ -333,7 +333,11 @@ async function doDel(id) {
   if (!did) return;
   if (!confirm('Delete this diagram and all versions?')) return;
   await apiDelete(did);
-  if (currentId === did) { currentId = null; currentTitle = null; currentProject = null; }
+  if (currentId === did) {
+    currentId = null; currentTitle = null; currentProject = null; lastSaved = '';
+    const canvas = window.__aviflow_store?.currentCanvas;
+    if (canvas) canvas.clear();
+  }
   msg('Deleted','ok');
   refreshList();
 }

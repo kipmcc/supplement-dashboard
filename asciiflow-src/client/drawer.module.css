@@ -18,8 +18,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
-  padding-right: 16px;
+  padding: 6px 16px 6px 10px;
 }
 
 :global(.MuiButton-root).freeformCharacterButton {
@@ -31,8 +30,9 @@
 }
 
 .helpText {
-  padding: 15px;
-  line-height: 1.8;
+  padding: 8px 12px;
+  line-height: 1.6;
+  font-size: 13px;
 }
 
 .bytesLabel {
