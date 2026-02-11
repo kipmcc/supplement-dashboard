@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-10 07:00 CST by Maureen*
+*Last updated: 2026-02-10 22:20 CST by Maureen*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -351,6 +351,41 @@ npx webpack --config webpack.prod.config.cjs
 cp dist/asciiflow.bundle.js ../asciiflow/
 cp dist/index.html ../asciiflow/
 ```
+
+### Creating Diagrams Programmatically (AI Agents)
+
+See **`asciiflow/AVIFLOW_GUIDE.md`** for the full guide. Key points:
+
+**Browser API:**
+```javascript
+window.__aviflow_api.loadText(diagramString);  // Load text into canvas
+window.__aviflow_api.getText();                 // Read canvas content
+_af.load('diagram-uuid');                       // Load from Supabase
+_af.topLeft();                                  // Position viewport
+_af.refresh();                                  // Refresh sidebar list
+```
+
+**Direct Supabase API (preferred for automation — no prompts):**
+```bash
+curl -X POST "$SUPABASE_URL/rest/v1/diagrams" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+  -H "Content-Type: application/json" -H "Prefer: return=representation" \
+  -d '{
+    "title": "My Diagram",
+    "content": "┌──────┐\n│ Box  │\n└──────┘",
+    "project_key": "outpost",
+    "created_by": "maureen",
+    "tags": ["architecture"],
+    "version_count": 1
+  }'
+```
+
+**Critical rules for well-formed diagrams:**
+1. **Every line must be exactly the same width** — pad with spaces
+2. Use Unicode box chars: `┌─┐│└┘├┤┬┴┼`
+3. Use Unicode arrows: `▲▼◄►` (not ASCII `v^<>`)
+4. Validate line widths programmatically before saving
+5. Use the `r()` builder pattern from the guide for consistent padding
 
 ---
 
