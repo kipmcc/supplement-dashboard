@@ -46,15 +46,14 @@ export const View = ({ ...rest }: React.HTMLAttributes<HTMLCanvasElement>) =>
       return () => disposer();
     });
 
-    // Attach a non-passive wheel listener so Ctrl+scroll preventDefault()
-    // actually works (React 17 registers onWheel as passive).
+    // Attach a non-passive wheel listener so preventDefault() works for
+    // both zoom (Ctrl+scroll) and pan (plain scroll). Without this,
+    // macOS two-finger swipe left triggers browser back navigation.
     useEffect(() => {
       const canvas = document.getElementById("ascii-canvas") as HTMLCanvasElement;
       if (!canvas) return;
       const handler = (e: WheelEvent) => {
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-        }
+        e.preventDefault();
       };
       canvas.addEventListener("wheel", handler, { passive: false });
       return () => canvas.removeEventListener("wheel", handler);
