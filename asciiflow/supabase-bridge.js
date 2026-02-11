@@ -198,7 +198,8 @@ function buildPanel(sidebar) {
     <button class="btn" onclick="_af.zoomIn()" title="Zoom in">+</button>
   </div>
   <div class="tr">
-    <button class="btn" onclick="_af.fitContent()" title="Fit diagram to screen">Fit</button>
+    <button class="btn" onclick="_af.centerContent()" title="Center diagram in view (keep zoom)">Center</button>
+    <button class="btn" onclick="_af.fitContent()" title="Fit diagram to screen (adjust zoom)">Fit</button>
     <button class="btn" onclick="_af.topLeft()" title="Reset to origin at 100%">⌂</button>
   </div>
 </div>
@@ -486,6 +487,31 @@ function doFitContent() {
   updateZoomDisplay();
 }
 
+function doCenterContent() {
+  const canvas = window.__aviflow_store?.currentCanvas;
+  if (!canvas) return;
+  const keys = canvas.committed.keys();
+  if (!keys.length) { msg('Nothing to center', 'err'); return; }
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const k of keys) {
+    if (k.x < minX) minX = k.x;
+    if (k.y < minY) minY = k.y;
+    if (k.x > maxX) maxX = k.x;
+    if (k.y > maxY) maxY = k.y;
+  }
+
+  const CW = 9, CH = 16;
+  const fcx = ((minX + maxX) / 2) * CW;
+  const fcy = ((minY + maxY) / 2) * CH;
+
+  // Offset so content center appears at visible-area center (keeping current zoom)
+  const sidebarOpen = !document.body.classList.contains('sidebar-collapsed');
+  const sidebarW = sidebarOpen ? 380 : 0;
+  const zoom = canvas.zoom;
+  canvas.setOffset({ x: fcx - sidebarW / (2 * zoom), y: fcy });
+}
+
 function updateZoomDisplay() {
   const el = document.getElementById('af-zoom');
   const c = window.__aviflow_store?.currentCanvas;
@@ -509,6 +535,7 @@ function fmt(iso) { if(!iso)return''; const d=new Date(iso); return d.toLocaleDa
 window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSaveNew,
   rename: doRename, dup: doDup, del: doDel, copy: doCopy, scrub: scrubDiagram,
   topLeft: topLeftJustify, clearCanvas: doClearCanvas,
-  zoomIn: doZoomIn, zoomOut: doZoomOut, fitContent: doFitContent };
+  zoomIn: doZoomIn, zoomOut: doZoomOut, fitContent: doFitContent,
+  centerContent: doCenterContent };
 
 window.addEventListener('DOMContentLoaded', injectUI);
