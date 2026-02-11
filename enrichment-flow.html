@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Enrichment Pipeline Flow</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a2e; font-family:-apple-system,BlinkMacSystemFont,sans-serif; color:#e0e0e0; padding:24px; overflow-y:auto; }
+  h1 { color:#00d4ff; font-size:22px; margin-bottom:4px; }
+  .subtitle { color:#888; font-size:13px; margin-bottom:20px; }
+  .pipeline { display:flex; flex-direction:column; gap:8px; max-width:900px; margin:0 auto; }
+  .step { background:#16213e; border:1px solid #33415c; border-radius:10px; padding:14px 18px; }
+  .step.active { border-color:#00d4ff; box-shadow:0 0 12px rgba(0,212,255,0.15); }
+  .step-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .step-num { background:#00d4ff; color:#000; font-weight:700; font-size:12px; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .step-title { font-weight:600; font-size:15px; color:#fff; }
+  .step-detail { font-size:12px; color:#aaa; line-height:1.5; margin-left:36px; }
+  .step-detail code { background:#0d1117; padding:1px 5px; border-radius:3px; color:#58a6ff; font-size:11px; }
+  .step-meta { display:flex; gap:12px; margin-top:6px; margin-left:36px; flex-wrap:wrap; }
+  .meta-tag { background:#0d1117; border:1px solid #30363d; border-radius:4px; padding:2px 8px; font-size:11px; color:#c9d1d9; }
+  .meta-tag.cost { color:#f0883e; border-color:#f0883e44; }
+  .meta-tag.time { color:#58a6ff; border-color:#58a6ff44; }
+  .meta-tag.rate { color:#3fb950; border-color:#3fb95044; }
+  .arrow { text-align:center; color:#00d4ff; font-size:16px; line-height:1; padding:2px 0; }
+  .branch { display:flex; gap:8px; }
+  .branch .step { flex:1; }
+  .section-title { color:#f0883e; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:12px 0 4px 0; }
+  .stats-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .stat-card { background:#16213e; border:1px solid #33415c; border-radius:8px; padding:10px 14px; flex:1; min-width:120px; }
+  .stat-val { font-size:22px; font-weight:700; color:#00d4ff; }
+  .stat-label { font-size:11px; color:#888; margin-top:2px; }
+  .issues { margin-top:16px; }
+  .issue { background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px 12px; margin-bottom:6px; font-size:12px; }
+  .issue .tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; margin-right:6px; }
+  .tag.bug { background:#f8514944; color:#f85149; }
+  .tag.todo { background:#f0883e44; color:#f0883e; }
+  .tag.idea { background:#3fb95044; color:#3fb950; }
+</style>
+</head>
+<body>
+<h1>🔬 Grok Web Search Enrichment Pipeline</h1>
+<div class="subtitle">grokLabelRunner.js — finding front label images for 6,264 products</div>
+
+<div class="pipeline">
+  <div class="section-title">📥 Input</div>
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">0</div>
+      <div class="step-title">Candidate Selection</div>
+    </div>
+    <div class="step-detail">
+      Supabase query: <code>canonical_products</code> WHERE brand + name + UPC exist AND <code>front_label_url IS NULL</code><br>
+      Priority: 45 well-known brands first (NOW, Thorne, Solgar, Carlson, etc.), then others<br>
+      Batch size: 50 products per batch, auto-continues
+    </div>
+    <div class="step-meta">
+      <span class="meta-tag">6,264 candidates total</span>
+      <span class="meta-tag">45 priority brands</span>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+  <div class="section-title">🔍 Discovery</div>
+
+  <div class="step active">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">Grok Web Search (xAI Responses API)</div>
+    </div>
+    <div class="step-detail">
+      <code>POST api.x.ai/v1/responses</code> — model: <code>grok-4-1-fast-reasoning</code> with built-in <code>web_search</code> tool<br>
+      Grok searches the web server-side (avg 10-11 searches) and returns a product page URL<br>
+      Blacklist filter: kusoglife.com, suppleroo.com, supp.co, biotus.ua, desertcart.com
+    </div>
+    <div class="step-meta">
+      <span class="meta-tag rate">96-100% URL hit rate</span>
+      <span class="meta-tag cost">~$0.50/product</span>
+      <span class="meta-tag time">~20-30s</span>
+    </div>
+  </div>
+
+  <div class="arrow">▼ URL found</div>
+  <div class="section-title">📸 Image Extraction</div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">Scrape Full-Size Image from Page</div>
+    </div>
+    <div class="step-detail">
+      HTTP fetch page HTML → extract images in priority order:<br>
+      1️⃣ <code>og:image</code> meta tag &nbsp; 2️⃣ Amazon <code>_AC_SL1500_</code> hi-res &nbsp; 3️⃣ iHerb <code>/l/</code> large &nbsp; 4️⃣ Shopify CDN full-size &nbsp; 5️⃣ Generic product images<br>
+      All URLs upgraded to full-size variants. Reject if &lt; 5KB.
+    </div>
+  </div>
+
+  <div class="arrow">▼ no image on page? ─── fallbacks ──┐</div>
+
+  <div class="branch">
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3a</div>
+        <div class="step-title">iHerb Direct Search</div>
+      </div>
+      <div class="step-detail">
+        HTTP: <code>iherb.com/search?kw={brand+name}</code><br>
+        Extract cloudinary image URL → upgrade to /l/ (large)
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3b</div>
+        <div class="step-title">Amazon Direct Search</div>
+      </div>
+      <div class="step-detail">
+        Search by UPC first, then brand+name → get /dp/ page → extract SL1500 image<br>
+        <span style="color:#f85149">⚠️ Sometimes returns wrong product — needs browser</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▼ image buffer (&gt;5KB)</div>
+  <div class="section-title">✅ Verification</div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">4</div>
+      <div class="step-title">Google Vision OCR Verification</div>
+    </div>
+    <div class="step-detail">
+      Convert buffer → PNG via <code>sharp</code> → Google Vision <code>TEXT_DETECTION</code><br>
+      <strong>Brand check:</strong> any brand word (&gt;2 chars) found in OCR text?<br>
+      <strong>Name check:</strong> ≥1 significant product name word in OCR text?<br>
+      <strong>Non-supplement scan:</strong> pet / dog / cat / shampoo / lotion keywords → flagged for review<br>
+      <span style="color:#3fb950">✅ PASS</span> = brand match AND ≥1 name word &nbsp;&nbsp; <span style="color:#f85149">❌ FAIL</span> = skip product
+    </div>
+    <div class="step-meta">
+      <span class="meta-tag rate">~70% pass rate (priority brands)</span>
+    </div>
+  </div>
+
+  <div class="arrow">▼ verified</div>
+  <div class="section-title">💾 Persist</div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">5</div>
+      <div class="step-title">Image Processing</div>
+    </div>
+    <div class="step-detail">
+      <code>sharp</code> → convert to WebP (quality 92, preserve original resolution)<br>
+      Capture dimensions metadata for audit trail
+    </div>
+    <div class="step-meta">
+      <span class="meta-tag">avg 123KB</span>
+      <span class="meta-tag">700-1500px</span>
+      <span class="meta-tag">webp q92</span>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">6</div>
+      <div class="step-title">Supabase Storage Upload</div>
+    </div>
+    <div class="step-detail">
+      Bucket: <code>supplement-images</code><br>
+      Path: <code>hunted/grok-search/{uuid}_front.webp</code><br>
+      Upsert: true | Cache: 3600s
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">7</div>
+      <div class="step-title">Database Linkage</div>
+    </div>
+    <div class="step-detail">
+      <code>UPDATE canonical_products SET</code><br>
+      &nbsp;&nbsp;<code>front_label_url</code> = Supabase public URL<br>
+      &nbsp;&nbsp;<code>front_label_storage_path</code> = <code>hunted/grok-search/{uuid}_front.webp</code><br>
+      &nbsp;&nbsp;<code>updated_at</code> = NOW()
+    </div>
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-val">70%</div>
+    <div class="stat-label">Save Rate (priority brands)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">$0.57</div>
+    <div class="stat-label">Cost / Product</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">29s</div>
+    <div class="stat-label">Avg Time / Product</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">123KB</div>
+    <div class="stat-label">Avg Image Size</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">~4,385</div>
+    <div class="stat-label">Est. Images (of 6,264)</div>
+  </div>
+</div>
+
+<div class="issues">
+  <div class="section-title" style="margin-top:20px">🔧 Known Issues / Opportunities</div>
+  <div class="issue"><span class="tag bug">BUG</span> Amazon direct fallback sometimes returns completely wrong products — needs browser-based scraping</div>
+  <div class="issue"><span class="tag bug">BUG</span> JS-rendered brand sites (americanhealthus.com) return empty HTML — need headless browser</div>
+  <div class="issue"><span class="tag todo">TODO</span> iHerb direct HTTP search not yielding results — may need cookies/JS session</div>
+  <div class="issue"><span class="tag idea">OPT</span> Batch multiple products per Grok request to reduce API overhead</div>
+  <div class="issue"><span class="tag idea">OPT</span> Use Grok's <code>enable_image_understanding</code> to verify images server-side (skip Vision API)</div>
+  <div class="issue"><span class="tag idea">OPT</span> Cache Grok-found URLs to skip re-searching on retries</div>
+</div>
+
+</body>
+</html>
