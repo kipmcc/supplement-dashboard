@@ -132,11 +132,13 @@ export class CanvasStore {
    */
   commitScratch() {
     const scratch = this.scratch.get();
-    // Auto-apply active color to all scratch cells
+    // Auto-apply active color to scratch cells that don't already have an
+    // explicit colorMap entry (row operations copy original colors into scratch
+    // and mark uncolored cells with "" — those should not be overwritten).
     const currentColor = (window as any).__aviflow_store?.currentColor?.get?.();
     if (currentColor) {
       for (const [key, val] of scratch.map.entries()) {
-        if (val && val !== "" && val !== " ") {
+        if (val && val !== "" && val !== " " && !scratch.colorMap.has(key)) {
           scratch.colorMap.set(key, currentColor);
         }
       }
@@ -193,8 +195,11 @@ export class CanvasStore {
         const newPos = new Vector(pos.x, pos.y + 1);
         scratch.set(newPos, val); // set shifted
         const ck = pos.toString();
+        const nk = newPos.toString();
         if (this.committed.colorMap.has(ck)) {
-          scratch.colorMap.set(newPos.toString(), this.committed.colorMap.get(ck));
+          scratch.colorMap.set(nk, this.committed.colorMap.get(ck));
+        } else {
+          scratch.colorMap.set(nk, ""); // marker: preserve "no color"
         }
       }
     }
@@ -214,8 +219,11 @@ export class CanvasStore {
           const newPos = new Vector(pos.x, pos.y - 1);
           scratch.set(newPos, val); // shift up
           const ck = pos.toString();
+          const nk = newPos.toString();
           if (this.committed.colorMap.has(ck)) {
-            scratch.colorMap.set(newPos.toString(), this.committed.colorMap.get(ck));
+            scratch.colorMap.set(nk, this.committed.colorMap.get(ck));
+          } else {
+            scratch.colorMap.set(nk, ""); // marker: preserve "no color"
           }
         }
       }

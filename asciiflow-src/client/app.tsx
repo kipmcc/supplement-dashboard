@@ -73,11 +73,14 @@ async function render() {
 // tslint:disable-next-line: no-console
 render().catch((e) => console.log(e));
 
-document.getElementById("root").addEventListener("keypress", (e) => controller.handleKeyPress(e));
-document.getElementById("root").addEventListener("keydown", (e) => controller.handleKeyDown(e));
-document.getElementById("root").addEventListener("keyup", (e) => controller.handleKeyUp(e));
+// Attach to document so shortcuts work regardless of which element has focus
+// (sidebar buttons, header, etc. steal focus from the canvas)
+document.addEventListener("keypress", (e) => controller.handleKeyPress(e));
+document.addEventListener("keydown", (e) => controller.handleKeyDown(e));
+document.addEventListener("keyup", (e) => controller.handleKeyUp(e));
 
 document.addEventListener("paste", (e) => {
+  if (store.locked.get()) return;
   e.preventDefault();
   // Text tool manages pasting it's own way.
   const clipboardText = e.clipboardData.getData("text");

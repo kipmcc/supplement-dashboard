@@ -158,7 +158,9 @@ export class Store {
 
   public readonly currentColor = watchableValue<string | null>(null);
 
-  public readonly darkMode = 
+  public readonly locked = watchableValue<boolean>(false);
+
+  public readonly darkMode =
     Persistent.json(
       "darkMode",
       window.matchMedia &&

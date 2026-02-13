@@ -56,6 +56,11 @@ async function apiDelete(id) {
   await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
 }
 
+async function apiSetLocked(id, locked) {
+  return (await fetch(`${API}/diagrams?id=eq.${id}`, { method: 'PATCH', headers: HEADERS,
+    body: JSON.stringify({ locked: !!locked, updated_at: new Date().toISOString() }) })).json();
+}
+
 // ===================== Canvas API =====================
 
 function loadToCanvas(text) {
@@ -108,6 +113,7 @@ function readFromCanvas() {
 let currentId = null;
 let currentTitle = null;
 let currentProject = null;
+let currentLocked = false;
 let lastSaved = '';
 
 // ===================== UI =====================
@@ -191,6 +197,7 @@ function buildPanel(sidebar) {
     <button class="btn" onclick="_af.saveNew()" title="Create new diagram">+ New</button>
   </div>
   <div class="tr">
+    <button id="af-btn-lock" class="btn" onclick="_af.toggleLock()" title="Toggle lock" disabled>🔓</button>
     <button id="af-btn-rename" class="btn" onclick="_af.rename()" title="Rename selected diagram" disabled>✏️</button>
     <button id="af-btn-dup" class="btn" onclick="_af.dup()" title="Duplicate selected diagram" disabled>📑</button>
     <button id="af-btn-del" class="btn" onclick="_af.del()" title="Delete selected diagram" disabled>🗑</button>
@@ -261,7 +268,8 @@ async function refreshList() {
     el.innerHTML = ds.map(d => {
       const sel = d.id === currentId;
       const indicator = sel ? '▸ ' : '  ';
-      return `<div class="itm ${sel?'on':''}" onclick="_af.load('${d.id}')">${indicator}${esc(d.title)}<span class="ver">v${d.version_count||1}</span></div>`;
+      const lockIcon = d.locked ? '🔒 ' : '';
+      return `<div class="itm ${sel?'on':''}" onclick="_af.load('${d.id}')">${indicator}${lockIcon}${esc(d.title)}<span class="ver">v${d.version_count||1}</span></div>`;
     }).join('');
     updateDetail();
   } catch(e) { el.innerHTML = `<div class="emp" style="color:#f87171">Error: ${e.message}</div>`; }
@@ -274,16 +282,27 @@ function updateDetail() {
   if (!el) return;
   const hasSel = !!currentId;
   // Enable/disable toolbar buttons
-  for (const id of ['af-btn-rename','af-btn-dup','af-btn-del']) {
+  for (const id of ['af-btn-rename','af-btn-dup','af-btn-del','af-btn-lock']) {
     const b = document.getElementById(id);
     if (b) b.disabled = !hasSel;
+  }
+  // Update lock button icon
+  const lockBtn = document.getElementById('af-btn-lock');
+  if (lockBtn) lockBtn.textContent = currentLocked ? '🔒' : '🔓';
+  // Disable rename+delete when locked
+  if (currentLocked) {
+    const renBtn = document.getElementById('af-btn-rename');
+    const delBtn = document.getElementById('af-btn-del');
+    if (renBtn) renBtn.disabled = true;
+    if (delBtn) delBtn.disabled = true;
   }
   if (!hasSel) { el.innerHTML = '<span style="color:#555">No file selected</span>'; return; }
   const d = _diagrams.find(x => x.id === currentId);
   const proj = (d?.project_key || currentProject) ? `<span class="dl-proj">📁 ${esc(d?.project_key || currentProject)}</span>` : '';
   const author = d?.created_by ? ` · ${esc(d.created_by)}` : '';
   const date = d?.updated_at ? `<div class="dl-date">${fmt(d.updated_at)}</div>` : '';
-  el.innerHTML = `<div>${proj}${author}</div>${date}`;
+  const lockBadge = currentLocked ? ' <span style="color:#f59e0b">🔒 Locked</span>' : '';
+  el.innerHTML = `<div>${proj}${author}${lockBadge}</div>${date}`;
 }
 
 // ===================== Handlers =====================
@@ -314,12 +333,15 @@ async function doLoad(id) {
   currentId = d.id;
   currentTitle = d.title;
   currentProject = d.project_key || null;
+  currentLocked = !!d.locked;
+  window.__aviflow_store?.locked?.set(currentLocked);
   lastSaved = d.content;
   msg(`Loaded "${d.title}"`, 'ok');
   refreshList();
 }
 
 async function doSave() {
+  if (currentId && currentLocked) { msg('Diagram is locked','err'); return; }
   const ascii = readFromCanvas();
   if (!ascii) { msg('Nothing to save — draw first!','err'); return; }
   // Use stored title/project for existing diagrams, prompt for new
@@ -355,6 +377,8 @@ async function doSaveNew() {
   currentId = null;
   currentTitle = null;
   currentProject = null;
+  currentLocked = false;
+  window.__aviflow_store?.locked?.set(false);
   await doSave();
 }
 
@@ -362,6 +386,7 @@ function doRename(id, cur) {
   const rid = id || currentId;
   const rcur = cur || currentTitle;
   if (!rid) return;
+  if (currentLocked && rid === currentId) { msg('Diagram is locked','err'); return; }
   const n = prompt('Rename:', rcur||'');
   if (!n || n === rcur) return;
   apiRename(rid, n).then(() => {
@@ -384,10 +409,13 @@ async function doDup(id) {
 async function doDel(id) {
   const did = id || currentId;
   if (!did) return;
+  if (currentLocked && did === currentId) { msg('Diagram is locked','err'); return; }
   if (!confirm('Delete this diagram and all versions?')) return;
   await apiDelete(did);
   if (currentId === did) {
-    currentId = null; currentTitle = null; currentProject = null; lastSaved = '';
+    currentId = null; currentTitle = null; currentProject = null; currentLocked = false;
+    window.__aviflow_store?.locked?.set(false);
+    lastSaved = '';
     const canvas = window.__aviflow_store?.currentCanvas;
     if (canvas) canvas.clear();
   }
@@ -406,6 +434,7 @@ function doCopy() {
 
 setInterval(() => {
   if (!currentId) return;
+  if (currentLocked) return;
   const ascii = readFromCanvas();
   if (!ascii) return;
   // Build content with colors
@@ -493,6 +522,7 @@ function scrubDiagram(text) {
 }
 
 function doScrub() {
+  if (currentLocked) { msg('Diagram is locked','err'); return; }
   const ascii = readFromCanvas();
   if (!ascii) { msg('Nothing to scrub', 'err'); return; }
   // Preserve colors before scrub
@@ -517,6 +547,7 @@ function doScrub() {
 // ===================== Clear Canvas =====================
 
 function doClearCanvas() {
+  if (currentLocked) { msg('Diagram is locked','err'); return; }
   const canvas = window.__aviflow_store?.currentCanvas;
   if (!canvas) return;
   if (canvas.committed.size() === 0) { msg('Canvas is empty', 'err'); return; }
@@ -638,6 +669,7 @@ function doSetColor(btn) {
 // ===================== Insert / Delete Row =====================
 
 function doInsertRow() {
+  if (currentLocked) { msg('Diagram is locked','err'); return; }
   const canvas = window.__aviflow_store?.currentCanvas;
   if (!canvas) return;
   const sel = canvas.selection.get();
@@ -654,6 +686,7 @@ function doInsertRow() {
 }
 
 function doDeleteRow() {
+  if (currentLocked) { msg('Diagram is locked','err'); return; }
   const canvas = window.__aviflow_store?.currentCanvas;
   if (!canvas) return;
   const sel = canvas.selection.get();
@@ -668,6 +701,20 @@ function doDeleteRow() {
   msg('Row deleted at Y=' + y + ' (\u2318Z to undo)', 'ok');
 }
 
+// ===================== Lock Toggle =====================
+
+async function doToggleLock() {
+  if (!currentId) return;
+  const newLocked = !currentLocked;
+  const r = await apiSetLocked(currentId, newLocked);
+  if (Array.isArray(r) && r[0]) {
+    currentLocked = !!r[0].locked;
+    window.__aviflow_store?.locked?.set(currentLocked);
+    msg(currentLocked ? 'Locked' : 'Unlocked', 'ok');
+    updateDetail();
+  }
+}
+
 // ===================== Init =====================
 
 window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSaveNew,
@@ -675,6 +722,7 @@ window._af = { refresh: refreshList, load: doLoad, save: doSave, saveNew: doSave
   topLeft: topLeftJustify, clearCanvas: doClearCanvas,
   zoomIn: doZoomIn, zoomOut: doZoomOut, fitContent: doFitContent,
   centerContent: doCenterContent,
-  setColor: doSetColor, insertRow: doInsertRow, deleteRow: doDeleteRow };
+  setColor: doSetColor, insertRow: doInsertRow, deleteRow: doDeleteRow,
+  toggleLock: doToggleLock };
 
 window.addEventListener('DOMContentLoaded', injectUI);

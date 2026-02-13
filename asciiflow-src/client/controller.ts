@@ -30,6 +30,7 @@ export class Controller {
   private lastMoveCell: Vector;
 
   startDraw(position: Vector, e: EventWithModifierKeys) {
+    if (store.locked.get()) return;
     this.mode = Mode.DRAW;
     store.currentTool.start(screenToCell(position), getModifierKeys(e));
   }
@@ -52,6 +53,11 @@ export class Controller {
   }
 
   handleKeyPress(event: KeyboardEvent) {
+    // Skip when focus is in a form input (e.g. sidebar filter, rename dialog)
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (store.locked.get()) return;
+
     if (event.keyCode == 8) {
       // Disable navigation back action on backspace.
       event.preventDefault();
@@ -65,6 +71,14 @@ export class Controller {
   }
 
   handleKeyDown(event: KeyboardEvent) {
+    // Skip when focus is in a form input (e.g. sidebar filter, rename dialog)
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (store.locked.get()) {
+      if (event.keyCode === 32) store.panning.set(true);
+      return;
+    }
+
     // Override some special characters so that they can be handled in one place.
     let specialKeyCode = null;
 
