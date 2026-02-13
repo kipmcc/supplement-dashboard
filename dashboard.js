@@ -88,15 +88,95 @@
         document.getElementById('totalBrands').textContent = (brandCount || 0).toLocaleString();
         document.getElementById('totalBrands').classList.remove('loading');
 
-        // Discovered products
-        const { count: discoveredCount } = await supabase
-          .from('discovered_products')
-          .select('*', { count: 'exact', head: true });
-        document.getElementById('discoveredProducts').textContent = discoveredCount?.toLocaleString() || '0';
-        document.getElementById('discoveredProducts').classList.remove('loading');
+        // GVM Fleet Status
+        await loadFleetStatus();
 
       } catch (error) {
         console.error('Error loading overview:', error);
+      }
+    }
+
+    // ─── GVM Fleet Status ───
+    let fleetPanelOpen = false;
+    let fleetRefreshTimer = null;
+
+    window.toggleFleetPanel = toggleFleetPanel;
+    function toggleFleetPanel() {
+      fleetPanelOpen = !fleetPanelOpen;
+      document.getElementById('fleetPanel').classList.toggle('hidden', !fleetPanelOpen);
+      if (fleetPanelOpen && !fleetRefreshTimer) {
+        fleetRefreshTimer = setInterval(loadFleetStatus, 15 * 60 * 1000); // 15 min
+      }
+    }
+
+    async function loadFleetStatus() {
+      try {
+        const { data: vms, error } = await supabase
+          .from('gvm_fleet_status')
+          .select('*')
+          .order('vm_name');
+
+        if (error || !vms?.length) {
+          document.getElementById('fleetTotalProducts').textContent = '0';
+          document.getElementById('fleetTotalProducts').classList.remove('loading');
+          return;
+        }
+
+        const totalScraped = vms.reduce((s, v) => s + (v.products_scraped || 0), 0);
+        const totalImages = vms.reduce((s, v) => s + (v.images_downloaded || 0), 0);
+        const totalErrors = vms.reduce((s, v) => s + (v.errors || 0), 0);
+        const runningCount = vms.filter(v => v.status === 'running').length;
+
+        // Summary card
+        document.getElementById('fleetTotalProducts').textContent = totalScraped.toLocaleString();
+        document.getElementById('fleetTotalProducts').classList.remove('loading');
+
+        const statusColors = { running: 'text-green-400', stopped: 'text-gray-400', error: 'text-red-400', complete: 'text-blue-400', unknown: 'text-yellow-400' };
+        const statusIcons = { running: '🟢', stopped: '⏹️', error: '🔴', complete: '✅', unknown: '🟡' };
+
+        // Mini summary under the number
+        document.getElementById('fleetVmSummary').innerHTML = vms.map(v =>
+          `<span class="${statusColors[v.status] || 'text-gray-500'}">${statusIcons[v.status] || '?'} ${v.vm_name.replace('amazon-', '')}: ${(v.products_scraped || 0)}</span>`
+        ).join(' · ');
+
+        // Last update time
+        const newest = vms.reduce((a, b) => new Date(a.updated_at) > new Date(b.updated_at) ? a : b);
+        const ago = Math.round((Date.now() - new Date(newest.updated_at).getTime()) / 60000);
+        document.getElementById('fleetLastUpdate').textContent = ago < 1 ? 'just now' : `${ago}m ago`;
+
+        // Expanded panel cards
+        const grid = document.getElementById('fleetGrid');
+        grid.innerHTML = vms.map(v => {
+          const pct = v.search_list_size > 0 ? Math.round((v.products_scraped || 0) / v.search_list_size * 100) : 0;
+          const statusColor = { running: 'border-green-500/50', stopped: 'border-gray-600', error: 'border-red-500/50', complete: 'border-blue-500/50' }[v.status] || 'border-gray-600';
+          return `
+            <div class="bg-gray-800 rounded-lg p-4 border ${statusColor}">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-semibold text-sm text-white">${v.vm_name}</span>
+                <span class="text-xs px-2 py-0.5 rounded ${v.status === 'running' ? 'bg-green-500/20 text-green-400' : v.status === 'complete' ? 'bg-blue-500/20 text-blue-400' : v.status === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-gray-600/20 text-gray-400'}">${v.status}</span>
+              </div>
+              <div class="text-xs text-purple-400 mb-3">${v.brand || 'N/A'}</div>
+              <div class="space-y-1 text-xs">
+                <div class="flex justify-between"><span class="text-gray-400">Products</span><span class="text-white font-mono">${(v.products_scraped || 0).toLocaleString()} / ${(v.search_list_size || 0).toLocaleString()}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Images</span><span class="text-white font-mono">${(v.images_downloaded || 0).toLocaleString()}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Errors</span><span class="text-white font-mono ${(v.errors || 0) > 0 ? 'text-red-400' : ''}">${v.errors || 0}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Skipped</span><span class="text-white font-mono">${v.skipped || 0}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">Elapsed</span><span class="text-white font-mono">${v.elapsed || '--'}</span></div>
+              </div>
+              <div class="mt-3">
+                <div class="w-full bg-gray-700 rounded-full h-1.5">
+                  <div class="bg-green-500 h-1.5 rounded-full transition-all" style="width: ${Math.min(pct, 100)}%"></div>
+                </div>
+                <div class="text-right text-[10px] text-gray-500 mt-1">${pct}%</div>
+              </div>
+              ${v.last_product_title ? `<div class="mt-2 text-[10px] text-gray-500 truncate" title="${v.last_product_title}">Last: ${v.last_product_title}</div>` : ''}
+            </div>`;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error loading fleet status:', error);
+        document.getElementById('fleetTotalProducts').textContent = '--';
+        document.getElementById('fleetTotalProducts').classList.remove('loading');
       }
     }
 

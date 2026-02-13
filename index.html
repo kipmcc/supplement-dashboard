@@ -131,14 +131,45 @@
           <div class="text-gray-400 text-xs sm:text-sm">Unique Brands</div>
           <div id="totalBrands" class="text-xl sm:text-3xl font-bold text-purple-400 loading">--</div>
         </div>
-        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-          <div class="text-gray-400 text-xs sm:text-sm">Discovered Products</div>
-          <div id="discoveredProducts" class="text-xl sm:text-3xl font-bold text-green-400 loading">--</div>
+        <div id="fleetStatusCard" class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700 cursor-pointer hover:border-green-500/50 transition-colors" onclick="toggleFleetPanel()">
+          <div class="text-gray-400 text-xs sm:text-sm flex items-center justify-between">
+            <span>🖥️ GVM Fleet</span>
+            <span id="fleetLastUpdate" class="text-[10px] text-gray-500"></span>
+          </div>
+          <div class="flex items-baseline gap-2">
+            <div id="fleetTotalProducts" class="text-xl sm:text-3xl font-bold text-green-400 loading">--</div>
+            <span class="text-xs text-gray-500">scraped</span>
+          </div>
+          <div id="fleetVmSummary" class="text-[10px] text-gray-500 mt-1 leading-tight"></div>
         </div>
       </div>
     </section>
 
-    <!-- Section 2: Data Coverage -->
+    <!-- Fleet Status Panel (expandable) -->
+    <section id="fleetPanel" class="mb-6 sm:mb-8 hidden">
+      <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
+        <span class="mr-2">🖥️</span> GVM Fleet Status
+        <span id="fleetRefreshTimer" class="ml-auto text-xs text-gray-500 font-normal"></span>
+      </h2>
+      <div id="fleetGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- VM cards rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Section 2: Data Gap Trends -->
+    <section class="mb-6 sm:mb-8">
+      <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
+        <span class="mr-2">📉</span> Data Gap Trends
+      </h2>
+      <div class="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+        <div id="dataGapsChart" class="h-64">
+          <canvas id="dataGapsCanvas"></canvas>
+        </div>
+        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
+      </div>
+    </section>
+
+    <!-- Section 3: Data Coverage -->
     <section class="mb-6 sm:mb-8">
       <h2 class="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center">
         <span class="mr-2">📈</span> Data Coverage
@@ -184,18 +215,7 @@
       </div>
     </section>
 
-    <!-- Section 6: Data Gap Trends -->
-    <section class="mb-8">
-      <h2 class="text-xl font-semibold mb-4 flex items-center">
-        <span class="mr-2">📉</span> Data Gap Trends
-      </h2>
-      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <div id="dataGapsChart" class="h-64">
-          <canvas id="dataGapsCanvas"></canvas>
-        </div>
-        <div id="dataGapsCurrentValues" class="loading text-gray-400 text-sm">Loading trends...</div>
-      </div>
-    </section>
+    <!-- Data Gap Trends moved to after Database Overview -->
 
     <!-- Section 6b: Enrichment Queue -->
     <section class="mb-8">
