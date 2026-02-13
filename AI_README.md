@@ -506,6 +506,86 @@ psql "postgresql://postgres.xijsvdhffiuxpepswnyb:Bk8iL2uStsSNTswM@aws-0-us-west-
 
 ---
 
+## 📐 AviFlow — Creating Diagrams Programmatically
+
+The **Diagrams tab** on supp-dash.vercel.app uses the AviFlow tool. Full guide: `asciiflow/AVIFLOW_GUIDE.md` in this repo.
+
+### Direct Supabase API (recommended for automation)
+
+```bash
+SUPABASE_URL='https://xijsvdhffiuxpepswnyb.supabase.co'
+ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpanN2ZGhmZml1eHBlcHN3bnliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNzU0NTYsImV4cCI6MjA4MTc1MTQ1Nn0.Y5igqaP-p4ZvvVP47xvy4SFCyZE030wyuITYIUwWlRI'
+
+curl -X POST "${SUPABASE_URL}/rest/v1/diagrams" \
+  -H "apikey: ${ANON_KEY}" \
+  -H "Authorization: Bearer ${ANON_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "title": "My Diagram Title",
+    "content": "┌──────┐\n│ Box  │\n└──────┘",
+    "project_key": "outpost",
+    "created_by": "jeff",
+    "tags": ["architecture"],
+    "version_count": 1
+  }'
+```
+
+**Required:** `title`, `content` (newline-separated rows)
+**Optional:** `project_key` (groups in sidebar), `created_by` (`jeff`/`maureen`/`claude`), `tags` (string array)
+
+### Builder Pattern (Critical: every line must be exactly the same width)
+
+```python
+W = 52  # inner width between │ borders
+
+def r(content=''):
+    return '│' + content.ljust(W)[:W] + '│'
+
+lines = [
+    '┌' + '─' * W + '┐',          # top
+    r('  Title Here'),              # content
+    '├' + '─' * W + '┤',          # divider
+    r('  - Item one'),
+    '└' + '─' * W + '┘',          # bottom
+]
+
+# VALIDATE before saving
+for i, line in enumerate(lines):
+    assert len(line) == W + 2, f"Line {i} is {len(line)} chars, expected {W+2}"
+
+content = '\n'.join(lines)
+```
+
+### Character Reference
+
+- **Box-drawing:** `┌─┐│└┘├┤┬┴┼` (always Unicode, never ASCII `+|-`)
+- **Arrows:** `▲▼◄►` (always Unicode, never ASCII `v^<>`)
+- **Connections:** `───►` horizontal, `│` + `▼` vertical
+- **Tees:** `┬` (split down), `┴` (merge up), `├` (split right), `┤` (merge left)
+
+### Updating an Existing Diagram
+
+1. Save version snapshot: POST to `diagram_versions` with `diagram_id`, `content`, `saved_by`
+2. Update diagram: PATCH `diagrams?id=eq.UUID` with new `content`, `updated_at`, incremented `version_count`
+
+### Browser API (inside AviFlow page)
+
+```javascript
+window.__aviflow_api.loadText(diagramString);  // Load into canvas
+window.__aviflow_api.getText();                 // Read from canvas
+_af.load('diagram-uuid');                       // Load from Supabase
+_af.refresh();                                  // Refresh sidebar
+_af.topLeft();                                  // Reposition viewport
+```
+
+### Schema
+
+- **`diagrams`:** id (uuid), title, content (text), project_key, created_by, tags (jsonb), version_count (int), created_at, updated_at
+- **`diagram_versions`:** id, diagram_id (FK), content, saved_by, created_at
+
+---
+
 ## 🚨 Emergency Procedures
 
 ### Database Issues
