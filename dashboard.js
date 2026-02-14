@@ -6,6 +6,37 @@
     let aviScoreChart;
     let currentTaskFilter = 'open'; // 'open', 'completed', or 'all'
     let allTasks = []; // Cache for task filtering
+    let allAgents = [];
+    let currentAgentFilter = 'all';
+    let messageCache = {};
+    let messageCounts = {};
+    let projectLookup = {};
+    let expandedThreads = new Set();
+
+    // HTML escaping for DB-sourced strings inserted into innerHTML
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
+    // Tailwind color class lookup — avoids dynamic interpolation that JIT can't detect
+    const twColor = {
+      cyan:    { bg600: 'bg-cyan-600', bg500_20: 'bg-cyan-500/20', text400: 'text-cyan-400', text300: 'text-cyan-300', border500: 'border-cyan-500', border500_30: 'border-cyan-500/30', ring400: 'ring-cyan-400' },
+      pink:    { bg600: 'bg-pink-600', bg500_20: 'bg-pink-500/20', text400: 'text-pink-400', text300: 'text-pink-300', border500: 'border-pink-500', border500_30: 'border-pink-500/30', ring400: 'ring-pink-400' },
+      amber:   { bg600: 'bg-amber-600', bg500_20: 'bg-amber-500/20', text400: 'text-amber-400', text300: 'text-amber-300', border500: 'border-amber-500', border500_30: 'border-amber-500/30', ring400: 'ring-amber-400' },
+      blue:    { bg600: 'bg-blue-600', bg500_20: 'bg-blue-500/20', text400: 'text-blue-400', text300: 'text-blue-300', border500: 'border-blue-500', border500_30: 'border-blue-500/30', ring400: 'ring-blue-400' },
+      green:   { bg600: 'bg-green-600', bg500_20: 'bg-green-500/20', text400: 'text-green-400', text300: 'text-green-300', border500: 'border-green-500', border500_30: 'border-green-500/30', ring400: 'ring-green-400' },
+      emerald: { bg600: 'bg-emerald-600', bg500_20: 'bg-emerald-500/20', text400: 'text-emerald-400', text300: 'text-emerald-300', border500: 'border-emerald-500', border500_30: 'border-emerald-500/30', ring400: 'ring-emerald-400' },
+      red:     { bg600: 'bg-red-600', bg500_20: 'bg-red-500/20', text400: 'text-red-400', text300: 'text-red-300', border500: 'border-red-500', border500_30: 'border-red-500/30', ring400: 'ring-red-400' },
+      purple:  { bg600: 'bg-purple-600', bg500_20: 'bg-purple-500/20', text400: 'text-purple-400', text300: 'text-purple-300', border500: 'border-purple-500', border500_30: 'border-purple-500/30', ring400: 'ring-purple-400' },
+      yellow:  { bg600: 'bg-yellow-600', bg500_20: 'bg-yellow-500/20', text400: 'text-yellow-400', text300: 'text-yellow-300', border500: 'border-yellow-500', border500_30: 'border-yellow-500/30', ring400: 'ring-yellow-400' },
+      gray:    { bg600: 'bg-gray-600', bg500_20: 'bg-gray-500/20', text400: 'text-gray-400', text300: 'text-gray-300', border500: 'border-gray-500', border500_30: 'border-gray-500/30', ring400: 'ring-gray-400' },
+    };
+    function tw(color, variant) {
+      return (twColor[color] || twColor.gray)[variant] || '';
+    }
 
     // Initialize
     async function init() {
@@ -901,22 +932,129 @@
     window.controlOngoingTask = controlOngoingTask;
     
     // ==================== END ONGOING TASKS ====================
-    
+
+    // ==================== AGENT SUPPORT ====================
+
+    async function loadAgents() {
+      try {
+        const { data, error } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('status', 'active')
+          .order('name');
+        if (error) throw error;
+        allAgents = data || [];
+      } catch (err) {
+        console.warn('[Dashboard] Could not load agents table, using fallback:', err.message);
+        allAgents = [
+          { name: 'jeff', display_name: 'Jeff', role: 'AI CTO', emoji: '🤖', color: 'cyan' },
+          { name: 'maureen', display_name: 'Maureen', role: 'AI CMO', emoji: '👩‍💻', color: 'pink' },
+          { name: 'kip', display_name: 'Kip', role: 'Human', emoji: '👤', color: 'amber' }
+        ];
+      }
+    }
+
+    function getAgentInfo(ownerName) {
+      const agent = allAgents.find(a => a.name === ownerName);
+      if (agent) return agent;
+      return { name: ownerName, display_name: ownerName, emoji: '👤', color: 'gray', role: '' };
+    }
+
+    function renderAgentPills(tasks) {
+      const container = document.getElementById('agentSelector');
+      if (!container) return;
+
+      // Count tasks per agent (standardize null owner)
+      const counts = {};
+      tasks.forEach(t => {
+        const owner = t.owner || 'jeff';
+        counts[owner] = (counts[owner] || 0) + 1;
+      });
+
+      const totalCount = tasks.length;
+      const isAllActive = currentAgentFilter === 'all';
+
+      let html = `
+        <button onclick="filterByAgent('all')"
+          class="px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            isAllActive
+              ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }">
+          All Agents <span class="ml-1 text-xs opacity-75">${totalCount}</span>
+        </button>
+      `;
+
+      for (const agent of allAgents) {
+        const count = counts[agent.name] || 0;
+        const isActive = currentAgentFilter === agent.name;
+        html += `
+          <button onclick="filterByAgent('${escapeHtml(agent.name)}')"
+            class="px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+              isActive
+                ? `${tw(agent.color, 'bg600')} text-white ring-2 ${tw(agent.color, 'ring400')}`
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }">
+            ${escapeHtml(agent.emoji)} ${escapeHtml(agent.display_name)} <span class="ml-1 text-xs opacity-75">${count}</span>
+          </button>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function filterByAgent(agentName) {
+      currentAgentFilter = agentName;
+      // Re-render with both filters applied
+      const statusFiltered = filterTasksByStatus(allTasks, currentTaskFilter);
+      const agentFiltered = filterTasksByAgent(statusFiltered, currentAgentFilter);
+      renderAgentPills(statusFiltered);
+      renderTaskQueue(agentFiltered);
+    }
+
+    function filterTasksByAgent(tasks, agent) {
+      if (agent === 'all') return tasks;
+      return tasks.filter(t => (t.owner || 'jeff') === agent);
+    }
+
+    window.filterByAgent = filterByAgent;
+
+    // ==================== END AGENT SUPPORT ====================
+
     // Load tasks from database
     async function loadTaskQueue() {
       try {
-        const { data: tasks, error } = await supabase
-          .from('task_queue')
-          .select('*')
-          .order('priority', { ascending: true })
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-        
-        allTasks = tasks || [];
-        renderTaskQueue(filterTasksByStatus(allTasks, currentTaskFilter));
+        // Parallel fetch: tasks, agents, projects, message counts
+        const [tasksResult, agentsResult, projectsResult] = await Promise.all([
+          supabase.from('task_queue').select('*').eq('is_project', false)
+            .order('priority', { ascending: true }).order('created_at', { ascending: true }),
+          allAgents.length === 0 ? loadAgents() : Promise.resolve(),
+          supabase.from('task_queue').select('task_key, title').eq('is_project', true)
+        ]);
+
+        if (tasksResult.error) throw tasksResult.error;
+
+        // Build project lookup
+        if (projectsResult && projectsResult.data) {
+          projectLookup = {};
+          projectsResult.data.forEach(p => { projectLookup[p.task_key] = p.title; });
+        }
+
+        allTasks = tasksResult.data || [];
+
+        // Load message counts for visible tasks
+        const taskKeys = allTasks.map(t => t.task_key);
+        if (taskKeys.length > 0) {
+          await loadMessageCounts(taskKeys);
+        }
+
+        // Apply both filters
+        const statusFiltered = filterTasksByStatus(allTasks, currentTaskFilter);
+        const agentFiltered = filterTasksByAgent(statusFiltered, currentAgentFilter);
+        renderAgentPills(statusFiltered);
+        renderTaskQueue(agentFiltered);
         updateTaskSummary(allTasks);
-        
+
       } catch (error) {
         console.error('Error loading task queue:', error);
       }
@@ -930,6 +1068,14 @@
         return tasks.filter(t => ['complete', 'completed'].includes(t.status));
       }
       return tasks; // 'all'
+    }
+
+    // Apply both filters when switching status tabs
+    function applyFilters() {
+      const statusFiltered = filterTasksByStatus(allTasks, currentTaskFilter);
+      const agentFiltered = filterTasksByAgent(statusFiltered, currentAgentFilter);
+      renderAgentPills(statusFiltered);
+      renderTaskQueue(agentFiltered);
     }
     
     // Switch task filter tab
@@ -961,9 +1107,9 @@
         // Show regular task queue, hide ongoing
         if (taskQueueContainer) taskQueueContainer.classList.remove('hidden');
         if (ongoingContainer) ongoingContainer.classList.add('hidden');
-        // Re-render with filter
+        // Re-render with both filters
         if (allTasks.length > 0) {
-          renderTaskQueue(filterTasksByStatus(allTasks, filter));
+          applyFilters();
         }
       }
     }
@@ -997,120 +1143,174 @@
       }
     }
     
+    // Render a single task card
+    function renderSingleTaskCard(task, agentInfo) {
+      const statusColors = {
+        pending: 'gray', approved: 'green', running: 'blue',
+        complete: 'emerald', completed: 'emerald', failed: 'red',
+        rejected: 'gray', blocked: 'red'
+      };
+      const statusIcons = {
+        pending: '⏳', approved: '✅', running: '🔄',
+        complete: '✓', completed: '✓', failed: '❌',
+        rejected: '🚫', blocked: '🚫'
+      };
+
+      const statusColor = statusColors[task.status] || 'gray';
+      const statusIcon = statusIcons[task.status] || '?';
+      const isActionable = task.status === 'pending';
+      const isComplete = task.status === 'complete' || task.status === 'completed';
+      const isRunning = task.status === 'running';
+      const isBlocked = task.status === 'blocked';
+
+      const catColor = task.category === 'pipeline' ? 'purple' :
+                      task.category === 'research' ? 'blue' :
+                      task.category === 'data_gaps' ? 'red' :
+                      task.category === 'expansion' ? 'yellow' : 'gray';
+
+      const safeKey = escapeHtml(task.task_key);
+      const safeTitle = escapeHtml(task.title);
+      const safeDesc = escapeHtml(task.description);
+
+      // Project badge
+      const projectName = task.project_key ? projectLookup[task.project_key] : null;
+      const projectBadge = projectName
+        ? `<span onclick="switchTab('projects')" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-500/30">📁 ${escapeHtml(projectName)}</span>`
+        : '';
+
+      // Message count badge (only show if there are messages or blocking)
+      const mc = messageCounts[task.task_key] || { total: 0, blocking: 0 };
+      const msgBadge = `<button onclick="toggleThread('${safeKey}')" class="text-xs px-2 py-0.5 rounded ${mc.blocking > 0 ? 'bg-red-500/20 text-red-300' : 'bg-gray-600/50 text-gray-400'} hover:bg-gray-600 transition-colors">
+            💬 ${mc.total}${mc.blocking > 0 ? ` <span class="text-red-400">(${mc.blocking} blocking)</span>` : ''}
+          </button>`;
+
+      // Blocked styling — use tw() for agent color
+      const blockedClass = isBlocked ? 'border-l-4 border-red-500 ring-1 ring-red-500/30' : `border-l-2 ${tw(agentInfo.color, 'border500')}`;
+
+      return `
+        <div class="task-card flex flex-col p-3 bg-gray-700/30 rounded ${blockedClass} ${isComplete ? 'opacity-60' : ''}">
+          <div class="flex items-start gap-3">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="${tw(statusColor, 'text400')}">${statusIcon}</span>
+                <span class="font-medium ${isComplete ? 'line-through' : ''}">${safeTitle}</span>
+                ${task.category ? `<span class="text-xs px-2 py-0.5 rounded ${tw(catColor, 'bg500_20')} ${tw(catColor, 'text300')}">${escapeHtml(task.category)}</span>` : ''}
+                ${projectBadge}
+                ${isBlocked ? '<span class="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300 animate-pulse">BLOCKED</span>' : ''}
+              </div>
+              <p class="text-sm text-gray-400 mt-1">${safeDesc}</p>
+              <div class="flex items-center gap-4 mt-2 text-xs flex-wrap">
+                ${task.estimated_products ? `<span class="${tw(agentInfo.color, 'text400')}">📊 ${task.estimated_products.toLocaleString()} products</span>` : ''}
+                ${task.estimated_time ? `<span class="text-gray-500">⏱️ ${escapeHtml(task.estimated_time)}</span>` : ''}
+                ${task.difficulty ? `<span class="text-gray-500">${task.difficulty === 'easy' ? '🟢' : task.difficulty === 'medium' ? '🟡' : '🔴'} ${escapeHtml(task.difficulty)}</span>` : ''}
+                ${msgBadge}
+              </div>
+              ${task.result_summary ? `<div class="mt-2 text-xs text-emerald-400">✓ ${escapeHtml(task.result_summary)}</div>` : ''}
+              ${task.error_message ? `<div class="mt-2 text-xs text-red-400">⚠️ ${escapeHtml(task.error_message)}</div>` : ''}
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              ${isActionable ? `
+                <button onclick="approveTask('${safeKey}')" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">
+                  ✓ Approve
+                </button>
+                <button onclick="rejectTask('${safeKey}')" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs" title="Reject task">
+                  ✗
+                </button>
+              ` : ''}
+              ${isRunning ? `<span class="px-3 py-1 bg-blue-600/50 rounded text-xs animate-pulse">Running...</span>` : ''}
+              ${isBlocked ? `<span class="px-3 py-1 bg-red-600/50 rounded text-xs animate-pulse">Blocked</span>` : ''}
+              ${!isComplete && !isActionable && !isBlocked ? `
+                <button onclick="completeTask('${safeKey}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-xs font-medium">
+                  ✓ Mark Complete
+                </button>
+              ` : ''}
+              ${isComplete ? `<span class="px-3 py-1 bg-emerald-600/30 rounded text-xs text-emerald-400">Done</span>` : ''}
+            </div>
+          </div>
+          <!-- Thread container (hidden by default) -->
+          <div id="thread-${safeKey}" class="hidden mt-3 pt-3 border-t border-gray-600/50">
+            <div class="text-gray-500 text-sm">Loading messages...</div>
+          </div>
+        </div>
+      `;
+    }
+
     // Render task queue UI
     function renderTaskQueue(tasks) {
       const container = document.getElementById('taskQueueContainer');
       if (!container) return;
-      
-      const owners = {
-        jeff: { title: '🤖 Jeff (AI Agent)', color: 'cyan', emoji: '🤖' },
-        maureen: { title: '👩‍💻 Maureen (Research)', color: 'pink', emoji: '👩‍💻' }
-      };
-      
-      const statusColors = {
-        pending: 'gray',
-        approved: 'green',
-        running: 'blue',
-        complete: 'emerald',
-        completed: 'emerald',
-        failed: 'red',
-        rejected: 'gray'
-      };
-      
-      const statusIcons = {
-        pending: '⏳',
-        approved: '✅',
-        running: '🔄',
-        complete: '✓',
-        completed: '✓',
-        failed: '❌',
-        rejected: '🚫'
-      };
-      
-      // Group tasks by owner first
+
+      // Group tasks by owner
       const byOwner = {};
       tasks.forEach(task => {
         const owner = task.owner || 'jeff';
         if (!byOwner[owner]) byOwner[owner] = [];
         byOwner[owner].push(task);
       });
-      
+
       let html = '';
-      
-      // Render each owner's section
-      for (const [ownerKey, ownerInfo] of Object.entries(owners)) {
+
+      // Get all unique owners that have tasks, ordered by allAgents then remaining
+      const renderedOwners = new Set();
+      const ownerOrder = [];
+
+      // First add agents in registry order
+      for (const agent of allAgents) {
+        if (byOwner[agent.name]) {
+          ownerOrder.push(agent.name);
+          renderedOwners.add(agent.name);
+        }
+      }
+      // Then any owners not in registry
+      for (const ownerKey of Object.keys(byOwner)) {
+        if (!renderedOwners.has(ownerKey)) {
+          ownerOrder.push(ownerKey);
+        }
+      }
+
+      for (const ownerKey of ownerOrder) {
         const ownerTasks = byOwner[ownerKey] || [];
         if (ownerTasks.length === 0) continue;
-        
+
+        const agentInfo = getAgentInfo(ownerKey);
         const pendingCount = ownerTasks.filter(t => t.status === 'pending').length;
+        const blockedCount = ownerTasks.filter(t => t.status === 'blocked').length;
         const completeCount = ownerTasks.filter(t => t.status === 'complete' || t.status === 'completed').length;
-        
+
         html += `
           <div class="mb-8">
-            <div class="flex items-center justify-between mb-4 pb-2 border-b border-${ownerInfo.color}-500/30">
-              <h3 class="text-xl font-bold text-${ownerInfo.color}-400">${ownerInfo.title}</h3>
+            <div class="flex items-center justify-between mb-4 pb-2 border-b ${tw(agentInfo.color, 'border500_30')}">
+              <h3 class="text-xl font-bold ${tw(agentInfo.color, 'text400')}">
+                ${escapeHtml(agentInfo.emoji)} ${escapeHtml(agentInfo.display_name)} ${agentInfo.role ? `<span class="text-sm font-normal text-gray-500">(${escapeHtml(agentInfo.role)})</span>` : ''}
+              </h3>
               <div class="flex gap-3 text-sm">
                 <span class="text-gray-400">⏳ ${pendingCount} pending</span>
+                ${blockedCount > 0 ? `<span class="text-red-400">🚫 ${blockedCount} blocked</span>` : ''}
                 <span class="text-emerald-400">✓ ${completeCount} done</span>
               </div>
             </div>
             <div class="space-y-2">
         `;
-        
+
         for (const task of ownerTasks) {
-          const statusColor = statusColors[task.status] || 'gray';
-          const statusIcon = statusIcons[task.status] || '?';
-          const isActionable = task.status === 'pending';
-          const isComplete = task.status === 'complete' || task.status === 'completed';
-          const isRunning = task.status === 'running';
-          
-          const catColor = task.category === 'pipeline' ? 'purple' : 
-                          task.category === 'research' ? 'blue' : 
-                          task.category === 'data_gaps' ? 'red' : 
-                          task.category === 'expansion' ? 'yellow' : 'gray';
-          
-          html += `
-            <div class="task-card flex items-start gap-3 p-3 bg-gray-700/30 rounded border-l-2 border-${ownerInfo.color}-500 ${isComplete ? 'opacity-60' : ''}">
-              <div class="flex-1">
-                <div class="flex items-center gap-2">
-                  <span class="text-${statusColor}-400">${statusIcon}</span>
-                  <span class="font-medium ${isComplete ? 'line-through' : ''}">${task.title}</span>
-                  ${task.category ? `<span class="text-xs px-2 py-0.5 rounded bg-${catColor}-500/20 text-${catColor}-300">${task.category}</span>` : ''}
-                </div>
-                <p class="text-sm text-gray-400 mt-1">${task.description || ''}</p>
-                <div class="flex gap-4 mt-2 text-xs">
-                  ${task.estimated_products ? `<span class="text-${ownerInfo.color}-400">📊 ${task.estimated_products.toLocaleString()} products</span>` : ''}
-                  ${task.estimated_time ? `<span class="text-gray-500">⏱️ ${task.estimated_time}</span>` : ''}
-                  ${task.difficulty ? `<span class="text-gray-500">${task.difficulty === 'easy' ? '🟢' : task.difficulty === 'medium' ? '🟡' : '🔴'} ${task.difficulty}</span>` : ''}
-                </div>
-                ${task.result_summary ? `<div class="mt-2 text-xs text-emerald-400">✓ ${task.result_summary}</div>` : ''}
-                ${task.error_message ? `<div class="mt-2 text-xs text-red-400">⚠️ ${task.error_message}</div>` : ''}
-              </div>
-              <div class="flex gap-2">
-                ${isActionable ? `
-                  <button onclick="approveTask('${task.task_key}')" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">
-                    ✓ Approve
-                  </button>
-                  <button onclick="rejectTask('${task.task_key}')" class="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs">
-                    ✗
-                  </button>
-                ` : ''}
-                ${isRunning ? `<span class="px-3 py-1 bg-blue-600/50 rounded text-xs animate-pulse">Running...</span>` : ''}
-                ${!isComplete && !isActionable ? `
-                  <button onclick="completeTask('${task.task_key}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-xs font-medium">
-                    ✓ Mark Complete
-                  </button>
-                ` : ''}
-                ${isComplete ? `<span class="px-3 py-1 bg-emerald-600/30 rounded text-xs text-emerald-400">Done</span>` : ''}
-              </div>
-            </div>
-          `;
+          html += renderSingleTaskCard(task, agentInfo);
         }
-        
+
         html += '</div></div>';
       }
-      
+
       container.innerHTML = html || '<div class="text-gray-400">No tasks in queue</div>';
+
+      // Re-expand any threads that were open before re-render
+      for (const taskKey of expandedThreads) {
+        const threadEl = document.getElementById('thread-' + taskKey);
+        if (threadEl) {
+          threadEl.classList.remove('hidden');
+          loadMessages(taskKey).then(msgs => {
+            renderThreadContent(threadEl, taskKey, msgs);
+          });
+        }
+      }
     }
     
     // Update task summary stats
@@ -1118,18 +1318,21 @@
       const total = tasks.length;
       const approved = tasks.filter(t => t.status === 'approved').length;
       const running = tasks.filter(t => t.status === 'running').length;
-      const complete = tasks.filter(t => t.status === 'complete').length;
+      const complete = tasks.filter(t => t.status === 'complete' || t.status === 'completed').length;
       const pending = tasks.filter(t => t.status === 'pending').length;
-      
+      const blocked = tasks.filter(t => t.status === 'blocked').length;
+
       const totalProducts = tasks
         .filter(t => t.status !== 'complete' && t.status !== 'rejected')
         .reduce((sum, t) => sum + (t.estimated_products || 0), 0);
-      
-      document.getElementById('taskTotal')?.textContent && (document.getElementById('taskTotal').textContent = total);
-      document.getElementById('taskApproved')?.textContent && (document.getElementById('taskApproved').textContent = approved + running);
-      document.getElementById('taskComplete')?.textContent && (document.getElementById('taskComplete').textContent = complete);
-      document.getElementById('taskPending')?.textContent && (document.getElementById('taskPending').textContent = pending);
-      document.getElementById('taskProducts')?.textContent && (document.getElementById('taskProducts').textContent = totalProducts.toLocaleString() + '+');
+
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl('taskTotal', total);
+      setEl('taskApproved', approved + running);
+      setEl('taskComplete', complete);
+      setEl('taskPending', pending);
+      setEl('taskBlocked', blocked);
+      setEl('taskProducts', totalProducts.toLocaleString() + '+');
     }
     
     // Approve a task
@@ -1140,6 +1343,7 @@
     
     // Reject a task
     async function rejectTask(taskKey) {
+      if (!confirm('Reject this task?')) return;
       await updateTaskStatus(taskKey, 'rejected');
     }
     
@@ -1169,57 +1373,289 @@
     
     // Expose to window
     window.completeTask = completeTask;
-    
+
+    // ==================== MESSAGE THREADS ====================
+
+    async function loadMessageCounts(taskKeys) {
+      try {
+        // Parallel fetch: total counts and blocking counts
+        const [totalsResult, blockingResult] = await Promise.all([
+          supabase.from('task_messages').select('task_key').in('task_key', taskKeys),
+          supabase.from('task_messages').select('task_key').in('task_key', taskKeys)
+            .eq('is_blocking', true).eq('is_resolved', false)
+        ]);
+
+        if (totalsResult.error) throw totalsResult.error;
+        if (blockingResult.error) throw blockingResult.error;
+
+        // Build counts
+        messageCounts = {};
+        taskKeys.forEach(k => { messageCounts[k] = { total: 0, blocking: 0 }; });
+        (totalsResult.data || []).forEach(r => {
+          if (!messageCounts[r.task_key]) messageCounts[r.task_key] = { total: 0, blocking: 0 };
+          messageCounts[r.task_key].total++;
+        });
+        (blockingResult.data || []).forEach(r => {
+          if (!messageCounts[r.task_key]) messageCounts[r.task_key] = { total: 0, blocking: 0 };
+          messageCounts[r.task_key].blocking++;
+        });
+      } catch (err) {
+        console.warn('[Dashboard] Could not load message counts:', err.message);
+      }
+    }
+
+    async function loadMessages(taskKey) {
+      if (messageCache[taskKey]) return messageCache[taskKey];
+      try {
+        const { data, error } = await supabase
+          .from('task_messages')
+          .select('*')
+          .eq('task_key', taskKey)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        messageCache[taskKey] = data || [];
+        return messageCache[taskKey];
+      } catch (err) {
+        console.warn('[Dashboard] Could not load messages for', taskKey, err.message);
+        return [];
+      }
+    }
+
+    function toggleThread(taskKey) {
+      const container = document.getElementById('thread-' + taskKey);
+      if (!container) return;
+
+      if (expandedThreads.has(taskKey)) {
+        expandedThreads.delete(taskKey);
+        container.classList.add('hidden');
+      } else {
+        expandedThreads.add(taskKey);
+        container.classList.remove('hidden');
+        loadMessages(taskKey).then(msgs => {
+          renderThreadContent(container, taskKey, msgs);
+        });
+      }
+    }
+
+    function renderThreadContent(container, taskKey, messages) {
+      const safeTaskKey = escapeHtml(taskKey).replace(/'/g, "\\'");
+
+      let html = '';
+
+      if (messages.length === 0) {
+        html += '<div class="text-gray-500 text-sm mb-3">No messages yet.</div>';
+      } else {
+        html += '<div class="space-y-2 max-h-96 overflow-y-auto mb-3">';
+        for (const msg of messages) {
+          const agent = getAgentInfo(msg.sender);
+          const time = new Date(msg.created_at).toLocaleString();
+          const blockingBadge = msg.is_blocking && !msg.is_resolved
+            ? '<span class="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300 ml-2">BLOCKING</span>'
+            : msg.is_blocking && msg.is_resolved
+            ? '<span class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-300 ml-2">RESOLVED</span>'
+            : '';
+
+          const resolveBtn = msg.is_blocking && !msg.is_resolved
+            ? `<button onclick="resolveMessage('${escapeHtml(msg.id)}', '${safeTaskKey}')" class="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 rounded ml-2">✓ Resolve</button>`
+            : '';
+
+          // Render markdown safely with DOMPurify
+          let renderedMsg;
+          if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            renderedMsg = DOMPurify.sanitize(marked.parse(msg.message));
+          } else if (typeof marked !== 'undefined') {
+            renderedMsg = marked.parse(msg.message).replace(/<script[\s\S]*?<\/script>/gi, '');
+          } else {
+            renderedMsg = escapeHtml(msg.message).replace(/\n/g, '<br>');
+          }
+
+          html += `
+            <div class="p-2 rounded ${msg.is_blocking && !msg.is_resolved ? 'bg-red-900/20 border border-red-700/30' : 'bg-gray-800/50'}">
+              <div class="flex items-center gap-2 text-xs text-gray-400 mb-1">
+                <span class="${tw(agent.color, 'text400')} font-medium">${escapeHtml(agent.emoji)} ${escapeHtml(agent.display_name)}</span>
+                <span>·</span>
+                <span>${time}</span>
+                ${blockingBadge}
+                ${resolveBtn}
+              </div>
+              <div class="text-sm text-gray-300 prose prose-sm prose-invert max-w-none">${renderedMsg}</div>
+            </div>
+          `;
+        }
+        html += '</div>';
+      }
+
+      // Reply input
+      html += `
+        <div class="flex gap-2">
+          <input id="msg-input-${taskKey}" type="text" placeholder="Type a message..."
+            class="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+            onkeydown="if(event.key==='Enter')sendMessage('${safeTaskKey}')">
+          <button id="msg-send-${taskKey}" onclick="sendMessage('${safeTaskKey}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium">
+            Send
+          </button>
+          <button id="msg-block-${taskKey}" onclick="sendMessage('${safeTaskKey}', true)" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium" title="Send as blocking question">
+            🚫 Block
+          </button>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    let sendingMessage = false;
+    async function sendMessage(taskKey, isBlocking = false) {
+      if (sendingMessage) return; // Prevent double-send
+      const input = document.getElementById('msg-input-' + taskKey);
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+
+      // Confirmation for blocking messages
+      if (isBlocking && !confirm('Send as blocking question? This will mark the task as Blocked.')) return;
+
+      // Disable all controls during send
+      sendingMessage = true;
+      input.disabled = true;
+      const sendBtn = document.getElementById('msg-send-' + taskKey);
+      const blockBtn = document.getElementById('msg-block-' + taskKey);
+      if (sendBtn) sendBtn.disabled = true;
+      if (blockBtn) blockBtn.disabled = true;
+
+      try {
+        const { error } = await supabase
+          .from('task_messages')
+          .insert({
+            task_key: taskKey,
+            sender: 'kip',
+            sender_type: 'human',
+            message: text,
+            is_blocking: isBlocking
+          });
+
+        if (error) throw error;
+
+        // If sending a blocking message, update task to blocked (only if currently running/approved)
+        if (isBlocking) {
+          await supabase
+            .from('task_queue')
+            .update({ status: 'blocked', updated_at: new Date().toISOString() })
+            .eq('task_key', taskKey)
+            .in('status', ['running', 'approved']);
+        }
+
+        // Clear cache and re-render
+        delete messageCache[taskKey];
+        input.value = '';
+        await loadTaskQueue();
+      } catch (err) {
+        console.error('Error sending message:', err);
+        alert('Failed to send message: ' + err.message);
+      } finally {
+        sendingMessage = false;
+        if (input) input.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (blockBtn) blockBtn.disabled = false;
+      }
+    }
+
+    async function resolveMessage(messageId, taskKey) {
+      try {
+        // Mark message resolved
+        const { error: msgErr } = await supabase
+          .from('task_messages')
+          .update({
+            is_resolved: true,
+            resolved_by: 'kip',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('id', messageId);
+
+        if (msgErr) throw msgErr;
+
+        // Check if any remaining unresolved blocking messages
+        const { data: remaining, error: chkErr } = await supabase
+          .from('task_messages')
+          .select('id')
+          .eq('task_key', taskKey)
+          .eq('is_blocking', true)
+          .eq('is_resolved', false);
+
+        if (chkErr) throw chkErr;
+
+        // If no more blockers, unblock the task (set back to running)
+        if (!remaining || remaining.length === 0) {
+          await supabase
+            .from('task_queue')
+            .update({ status: 'running', updated_at: new Date().toISOString() })
+            .eq('task_key', taskKey)
+            .eq('status', 'blocked');
+        }
+
+        // Clear cache and re-render
+        delete messageCache[taskKey];
+        await loadTaskQueue();
+      } catch (err) {
+        console.error('Error resolving message:', err);
+      }
+    }
+
+    window.toggleThread = toggleThread;
+    window.sendMessage = sendMessage;
+    window.resolveMessage = resolveMessage;
+
+    // ==================== END MESSAGE THREADS ====================
+
     // ==================== PROJECTS ====================
     
     async function loadProjects() {
       try {
+        // Ensure agents are loaded
+        if (allAgents.length === 0) await loadAgents();
+
         // Load projects from task_queue where is_project=true
         const { data: projects, error: projError } = await supabase
           .from('task_queue')
           .select('*')
           .eq('is_project', true)
           .order('priority', { ascending: true });
-        
+
         if (projError) throw projError;
-        
+
         // Load all subtasks
-        const { data: allTasks, error: taskError } = await supabase
+        const { data: projectTasks, error: taskError } = await supabase
           .from('task_queue')
           .select('*')
           .eq('is_project', false)
           .not('project_key', 'is', null)
           .order('priority', { ascending: true });
-        
+
         if (taskError) throw taskError;
-        
+
         // Group subtasks by project_key
         const subtasksByProject = {};
-        allTasks.forEach(task => {
+        projectTasks.forEach(task => {
           if (!subtasksByProject[task.project_key]) subtasksByProject[task.project_key] = [];
           subtasksByProject[task.project_key].push(task);
         });
-        
+
         // Update summary counts
         document.getElementById('projectTotal').textContent = projects.length;
-        document.getElementById('projectCritical').textContent = 
+        document.getElementById('projectCritical').textContent =
           projects.filter(p => p.priority === 1).length;
-        document.getElementById('projectHigh').textContent = 
+        document.getElementById('projectHigh').textContent =
           projects.filter(p => p.priority === 2).length;
-        document.getElementById('projectActive').textContent = 
+        document.getElementById('projectActive').textContent =
           projects.filter(p => !['complete', 'completed', 'archived'].includes(p.status)).length;
-        
-        // Status colors and icons
+
+        // Status colors
         const statusColors = {
-          planning: 'blue',
-          research: 'purple', 
-          pending: 'yellow',
-          running: 'green',
-          complete: 'emerald',
-          completed: 'emerald',
-          archived: 'gray'
+          planning: 'blue', research: 'purple', pending: 'yellow',
+          running: 'green', complete: 'emerald', completed: 'emerald',
+          archived: 'gray', blocked: 'red'
         };
-        
+
         const priorityBadges = {
           1: { color: 'red', label: '🔴 P1' },
           2: { color: 'orange', label: '🟠 P2' },
@@ -1228,12 +1664,7 @@
           5: { color: 'gray', label: '⚪ P5' },
           6: { color: 'gray', label: '⚪ P6' }
         };
-        
-        const owners = {
-          jeff: { title: '🤖 Jeff (AI Agent)', color: 'cyan' },
-          maureen: { title: '👩‍💻 Maureen (Research)', color: 'pink' }
-        };
-        
+
         // Group projects by owner
         const byOwner = {};
         projects.forEach(p => {
@@ -1241,67 +1672,98 @@
           if (!byOwner[owner]) byOwner[owner] = [];
           byOwner[owner].push(p);
         });
-        
+
+        // Build owner render order (agents first, then remaining)
+        const renderedOwners = new Set();
+        const ownerOrder = [];
+        for (const agent of allAgents) {
+          if (byOwner[agent.name]) {
+            ownerOrder.push(agent.name);
+            renderedOwners.add(agent.name);
+          }
+        }
+        for (const ownerKey of Object.keys(byOwner)) {
+          if (!renderedOwners.has(ownerKey)) ownerOrder.push(ownerKey);
+        }
+
         // Render project cards grouped by owner
         const grid = document.getElementById('projectsGrid');
         let html = '';
-        
-        for (const [ownerKey, ownerInfo] of Object.entries(owners)) {
+
+        for (const ownerKey of ownerOrder) {
+          const agentInfo = getAgentInfo(ownerKey);
           const ownerProjects = byOwner[ownerKey] || [];
-          
+
           html += `
             <div class="col-span-full mb-4">
-              <h3 class="text-lg font-bold text-${ownerInfo.color}-400 border-b border-${ownerInfo.color}-500/30 pb-2 mb-4">
-                ${ownerInfo.title}
+              <h3 class="text-lg font-bold ${tw(agentInfo.color, 'text400')} border-b ${tw(agentInfo.color, 'border500_30')} pb-2 mb-4">
+                ${escapeHtml(agentInfo.emoji)} ${escapeHtml(agentInfo.display_name)} ${agentInfo.role ? `<span class="text-sm font-normal text-gray-500">(${escapeHtml(agentInfo.role)})</span>` : ''}
                 <span class="text-sm font-normal text-gray-500 ml-2">(${ownerProjects.length} projects)</span>
               </h3>
             </div>
           `;
-          
+
           if (ownerProjects.length === 0) {
             html += `<div class="col-span-full text-gray-500 mb-6">No projects assigned</div>`;
             continue;
           }
-          
+
           for (const project of ownerProjects) {
             const statusColor = statusColors[project.status] || 'gray';
             const priority = priorityBadges[project.priority] || priorityBadges[5];
             const localPath = `projects/${project.project_key}/`;
             const subtasks = subtasksByProject[project.project_key] || [];
-            const completedSubtasks = subtasks.filter(t => t.status === 'complete' || t.status === 'completed').length;
-            
+
+            // Status breakdown pills
+            const runningCount = subtasks.filter(t => t.status === 'running').length;
+            const blockedCount = subtasks.filter(t => t.status === 'blocked').length;
+            const pendingCount = subtasks.filter(t => ['pending', 'approved'].includes(t.status)).length;
+            const doneCount = subtasks.filter(t => ['complete', 'completed'].includes(t.status)).length;
+            const hasBlocked = blockedCount > 0;
+
+            let statusPillsHtml = '';
+            if (subtasks.length > 0) {
+              const pills = [];
+              if (runningCount > 0) pills.push(`<span class="text-blue-400">${runningCount} running</span>`);
+              if (blockedCount > 0) pills.push(`<span class="text-red-400">${blockedCount} blocked</span>`);
+              if (pendingCount > 0) pills.push(`<span class="text-yellow-400">${pendingCount} waiting</span>`);
+              if (doneCount > 0) pills.push(`<span class="text-emerald-400">${doneCount} done</span>`);
+              statusPillsHtml = `<span class="text-xs ml-2">${pills.join(' · ')}</span>`;
+            }
+
             html += `
-              <div class="bg-gray-900 rounded-lg p-4 border border-gray-700 hover:border-${ownerInfo.color}-500/50 transition-colors">
+              <div class="bg-gray-900 rounded-lg p-4 border ${hasBlocked ? 'border-red-700/50' : 'border-gray-700'} hover:${tw(agentInfo.color, 'border500')} transition-colors">
                 <div class="flex items-start justify-between mb-2">
-                  <h4 class="font-semibold text-white">📁 ${project.title}</h4>
-                  <span class="text-xs px-2 py-1 rounded-full bg-${priority.color}-900/50 text-${priority.color}-400 border border-${priority.color}-700">
+                  <h4 class="font-semibold text-white">📁 ${escapeHtml(project.title)}</h4>
+                  <span class="text-xs px-2 py-1 rounded-full ${tw(priority.color, 'bg500_20')} ${tw(priority.color, 'text400')} border ${tw(priority.color, 'border500')}">
                     ${priority.label}
                   </span>
                 </div>
-                <div class="flex items-center gap-2 mb-3">
-                  <span class="inline-block w-2 h-2 rounded-full bg-${statusColor}-500"></span>
-                  <span class="text-sm text-${statusColor}-400 capitalize">${project.status}</span>
-                  ${subtasks.length > 0 ? `<span class="text-xs text-gray-500 ml-2">• ${completedSubtasks}/${subtasks.length} tasks</span>` : ''}
+                <div class="flex items-center gap-2 mb-3 flex-wrap">
+                  <span class="inline-block w-2 h-2 rounded-full ${tw(statusColor, 'bg600')}"></span>
+                  <span class="text-sm ${tw(statusColor, 'text400')} capitalize">${escapeHtml(project.status)}</span>
+                  ${statusPillsHtml}
+                  ${hasBlocked ? '<span class="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300">Has blocked tasks</span>' : ''}
                 </div>
-                ${project.description ? `<p class="text-sm text-gray-400 mb-3">${project.description}</p>` : ''}
-                
+                ${project.description ? `<p class="text-sm text-gray-400 mb-3">${escapeHtml(project.description)}</p>` : ''}
+
                 ${subtasks.length > 0 ? `
                   <div class="mt-3 pt-3 border-t border-gray-700">
                     <div class="text-xs text-gray-500 mb-2">Subtasks:</div>
                     <div class="space-y-1">
                       ${subtasks.slice(0, 5).map(t => `
                         <div class="text-xs flex items-center gap-2">
-                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-emerald-400' : t.status === 'running' ? 'text-blue-400' : 'text-gray-500'}">
-                            ${t.status === 'complete' || t.status === 'completed' ? '✓' : t.status === 'running' ? '🔄' : '○'}
+                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-emerald-400' : t.status === 'running' ? 'text-blue-400' : t.status === 'blocked' ? 'text-red-400' : 'text-gray-500'}">
+                            ${t.status === 'complete' || t.status === 'completed' ? '✓' : t.status === 'running' ? '🔄' : t.status === 'blocked' ? '🚫' : '○'}
                           </span>
-                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-400'}">${t.title}</span>
+                          <span class="${t.status === 'complete' || t.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-400'}">${escapeHtml(t.title)}</span>
                         </div>
                       `).join('')}
                       ${subtasks.length > 5 ? `<div class="text-xs text-gray-600">+${subtasks.length - 5} more...</div>` : ''}
                     </div>
                   </div>
                 ` : ''}
-                
+
                 <div class="text-xs text-gray-500 flex items-center gap-1 mt-3">
                   <span>📂</span>
                   <code class="bg-gray-800 px-1 rounded">${localPath}</code>
@@ -1310,12 +1772,12 @@
             `;
           }
         }
-        
+
         grid.innerHTML = html || '<div class="text-gray-400 col-span-full">No projects found</div>';
-        
+
       } catch (error) {
         console.error('Error loading projects:', error);
-        document.getElementById('projectsGrid').innerHTML = 
+        document.getElementById('projectsGrid').innerHTML =
           `<div class="text-red-400 col-span-full text-center py-8">Error loading projects: ${error.message}</div>`;
       }
     }

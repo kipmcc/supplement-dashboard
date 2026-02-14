@@ -1,7 +1,23 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-11 by Kip — added color API and row operations (AviFlow v0.9.2)*
+*Last updated: 2026-02-14 by Kip — tasks redesign: dynamic agents, message threads, blocked status*
 *This file is the single source of truth for AI agents operating on this system.*
+
+---
+
+## 📖 Per-Tab Guides
+
+Each dashboard tab has a detailed guide for AI agents. These are living documents — **update the relevant guide whenever you change a tab's functionality.**
+
+| Tab | Guide File | Covers |
+|-----|-----------|--------|
+| **Dashboard** | [`docs/DASHBOARD_GUIDE.md`](docs/DASHBOARD_GUIDE.md) | Metrics, charts, fleet status, gap trends |
+| **Projects** | [`docs/PROJECTS_GUIDE.md`](docs/PROJECTS_GUIDE.md) | Project lifecycle, STATUS.md, subtasks |
+| **Tasks** | [`docs/TASKS_GUIDE.md`](docs/TASKS_GUIDE.md) | Task queue, approval workflow, ongoing tasks |
+| **Pipeline** | [`docs/PIPELINE_GUIDE.md`](docs/PIPELINE_GUIDE.md) | Pipeline health, content queue, throughput |
+| **Diagrams** | [`asciiflow/AVIFLOW_GUIDE.md`](asciiflow/AVIFLOW_GUIDE.md) | AviFlow editor, Supabase API, drawing guide |
+
+**Rule: If you change a tab, update its guide.**
 
 ---
 
@@ -25,14 +41,16 @@
 | **Diagrams** | AviFlow editor (navigates to `/asciiflow/`) | `diagrams`, `diagram_versions` |
 
 ### Tasks Tab — Sub-Tabs
-The Tasks tab has four filter views:
+The Tasks tab has four filter views plus an **agent selector**:
 
 | Sub-Tab | Shows | Use For |
 |---------|-------|---------|
-| **📋 Open Tasks** | pending, approved, running, planning, research | Active work items |
+| **📋 Open Tasks** | pending, approved, running, blocked, planning, research | Active work items |
 | **✅ Completed** | complete, completed | Finished tasks |
 | **🔄 Ongoing** | Background processes (Image Hunter, etc.) | Pause/resume long-running jobs |
 | **📑 All** | Everything | Full view |
+
+**Agent Selector Pills:** Filter tasks by agent (All, Jeff, Maureen, Kip, etc.). Agents loaded dynamically from `agents` table.
 
 ---
 
@@ -149,7 +167,7 @@ Update task_queue status to `complete` (where `is_project=true` and matching `pr
 ```
 pending → approved → running → complete
     ↓         ↓         ↓
- rejected   failed    paused
+ rejected   failed    blocked → running (when unblocked)
 ```
 
 ### Status Definitions
@@ -158,23 +176,40 @@ pending → approved → running → complete
 | `pending` | Awaiting review | Creator |
 | `approved` | Greenlit for execution | Kip (via dashboard) |
 | `running` | Currently executing | AI (auto) |
-| `paused` | Temporarily halted | AI or Human |
+| `blocked` | Waiting on human answer | Agent (via blocking message) or Human |
 | `complete` | Successfully finished | AI or Human |
 | `failed` | Error during execution | AI (auto) |
 | `rejected` | Won't do | Kip |
 
+### Blocking Questions
+Agents can post blocking questions on any task via `task_messages`:
+1. Agent INSERTs a message with `is_blocking = true`
+2. Task status changes to `blocked`
+3. Human reads the question on the dashboard, types an answer, clicks **Resolve**
+4. `resolveMessage()` marks the message resolved and checks for remaining blockers
+5. If no more unresolved blocking messages, task auto-returns to `running`
+
+### Agent Registry
+Agents are stored in the `agents` table (not hardcoded). Register new agents:
+```sql
+INSERT INTO agents (name, display_name, role, emoji, color)
+VALUES ('new-agent', 'New Agent', 'Specialist', '🔬', 'emerald')
+ON CONFLICT (name) DO NOTHING;
+```
+
 ### Auto-Execution Rules
-- **Jeff** checks `status = 'approved'` every 5 minutes
-- **Maureen** checks every hour (cron job)
+- Agents check `status = 'approved'` on their schedule
 - **Approved = GO.** Start immediately, own through completion. Sequential by priority.
 - On pickup: set `status = 'running'`, `started_at = NOW()`
 - On finish: set `status = 'complete'`, `completed_at = NOW()`, fill `result_summary`
 - On error: set `status = 'failed'`, fill `error_message`
+- On blocker: INSERT into `task_messages` with `is_blocking = true`, set task `status = 'blocked'`
 
 ### Task Ownership
-- `owner = 'jeff'` → CTO tasks (infrastructure, scraping, database)
-- `owner = 'maureen'` → CMO tasks (content, social, marketing, Outpost)
-- `owner = 'kip'` → Tasks requiring Kip's direct action
+Ownership is dynamic — any agent in the `agents` table can own tasks. Current agents:
+- `jeff` → AI CTO (infrastructure, scraping, database)
+- `maureen` → AI CMO (content, social, marketing)
+- `kip` → Human (tasks requiring human action)
 
 ### Creating Tasks (SQL)
 ```sql
@@ -431,6 +466,20 @@ SELECT COUNT(*) FROM canonical_products WHERE front_label_url IS NOT NULL;
 Granular task tracking.
 ```sql
 SELECT task_key, title, status, owner FROM task_queue WHERE status != 'complete';
+```
+
+### agents
+Dynamic agent registry. Drives agent selector pills and owner sections.
+```sql
+SELECT name, display_name, role, emoji, color FROM agents WHERE status = 'active';
+```
+
+### task_messages
+Per-task threaded conversations with blocking question support.
+```sql
+SELECT * FROM task_messages WHERE task_key = 'some-task' ORDER BY created_at;
+-- Check unresolved blockers:
+SELECT * FROM task_messages WHERE task_key = 'some-task' AND is_blocking = true AND is_resolved = false;
 ```
 
 ### metrics_history

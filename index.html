@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <style>
     .loading { animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -554,7 +556,7 @@
     <div id="content-tasks" class="tab-content">
 
       <!-- Task Summary -->
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
           <div class="text-gray-400 text-sm">Total Tasks</div>
           <div id="taskTotal" class="text-3xl font-bold text-white">--</div>
@@ -562,6 +564,10 @@
         <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
           <div class="text-gray-400 text-sm">Pending</div>
           <div id="taskPending" class="text-3xl font-bold text-yellow-400">--</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-4 border border-red-700/50">
+          <div class="text-gray-400 text-sm">Blocked</div>
+          <div id="taskBlocked" class="text-3xl font-bold text-red-400">--</div>
         </div>
         <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
           <div class="text-gray-400 text-sm">Approved/Running</div>
@@ -583,10 +589,15 @@
           <span>ℹ️</span> Task Approval Workflow
         </div>
         <p class="text-sm text-gray-300 mt-1">
-          Click <span class="text-green-400 font-medium">✓ Approve</span> to authorize a task. 
-          Jeff will execute approved tasks and update status here.
-          Approved tasks will show as "Running" when in progress.
+          Click <span class="text-green-400 font-medium">✓ Approve</span> to authorize a task.
+          Agents will execute approved tasks and update status here.
+          If an agent posts a <span class="text-red-400 font-medium">blocking question</span>, answer and click Resolve to unblock.
         </p>
+      </div>
+
+      <!-- Agent Selector -->
+      <div id="agentSelector" class="flex flex-wrap gap-2 mb-4">
+        <!-- Dynamically rendered by renderAgentPills() -->
       </div>
 
       <!-- Task Filter Tabs -->
