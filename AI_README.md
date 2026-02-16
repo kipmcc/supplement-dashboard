@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-14 by Kip — tasks redesign: dynamic agents, message threads, blocked status*
+*Last updated: 2026-02-16 by Maureen — ongoing tasks now support message threads (same as regular tasks)*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---

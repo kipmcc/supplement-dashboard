@@ -799,6 +799,13 @@
           .order('created_at', { ascending: true });
         
         if (error) throw error;
+
+        // Load message counts for ongoing tasks
+        const ongoingKeys = (tasks || []).map(t => t.task_key);
+        if (ongoingKeys.length > 0) {
+          await loadMessageCounts(ongoingKeys);
+        }
+
         renderOngoingTasks(tasks || []);
       } catch (error) {
         console.error('Error loading ongoing tasks:', error);
@@ -827,67 +834,79 @@
         const status = statusColors[task.status] || statusColors.stopped;
         const progressPct = task.progress_total ? Math.round((task.progress_current / task.progress_total) * 100) : 0;
         const lastHeartbeat = task.last_heartbeat ? new Date(task.last_heartbeat).toLocaleTimeString() : 'Never';
+        const safeKey = escapeHtml(task.task_key);
+
+        // Message count badge (reuses same pattern as regular tasks)
+        const mc = messageCounts[task.task_key] || { total: 0, blocking: 0 };
+        const msgBadge = `<button onclick="toggleThread('${safeKey}')" class="text-xs px-2 py-0.5 rounded ${mc.blocking > 0 ? 'bg-red-500/20 text-red-300' : 'bg-gray-600/50 text-gray-400'} hover:bg-gray-600 transition-colors">
+              💬 ${mc.total}${mc.blocking > 0 ? ` <span class="text-red-400">(${mc.blocking} blocking)</span>` : ''}
+            </button>`;
         
         html += `
           <div class="bg-gray-800 rounded-lg p-4 border border-${status.bg}-500/50">
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <span class="text-lg">${status.icon}</span>
-                <span class="font-medium text-white">${task.title}</span>
+                <span class="font-medium text-white">${escapeHtml(task.title)}</span>
                 <span class="px-2 py-0.5 rounded text-xs bg-${status.bg}-600/30 text-${status.text}-400">${task.status}</span>
+                ${mc.blocking > 0 ? '<span class="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-300 animate-pulse">BLOCKED</span>' : ''}
               </div>
               <div class="flex gap-2">
                 ${task.status === 'running' ? `
-                  <button onclick="controlOngoingTask('${task.task_key}', 'pause')" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium">
+                  <button onclick="controlOngoingTask('${safeKey}', 'pause')" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium">
                     ⏸️ Pause
                   </button>
                 ` : ''}
                 ${task.status === 'paused' ? `
-                  <button onclick="controlOngoingTask('${task.task_key}', 'resume')" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">
+                  <button onclick="controlOngoingTask('${safeKey}', 'resume')" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">
                     ▶️ Resume
                   </button>
                 ` : ''}
                 ${task.status === 'stopped' ? `
-                  <button onclick="controlOngoingTask('${task.task_key}', 'start')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium">
+                  <button onclick="controlOngoingTask('${safeKey}', 'start')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium">
                     ▶️ Start
                   </button>
                 ` : ''}
                 ${task.status !== 'stopped' ? `
-                  <button onclick="controlOngoingTask('${task.task_key}', 'stop')" class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium">
+                  <button onclick="controlOngoingTask('${safeKey}', 'stop')" class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium">
                     ⏹️ Stop
                   </button>
                 ` : ''}
               </div>
             </div>
-            <div class="text-sm text-gray-400 mb-2">${task.description || ''}</div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span class="text-gray-500">Progress:</span>
-                <span class="text-white ml-1">${task.progress_current || 0}${task.progress_total ? '/' + task.progress_total : ''}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Success:</span>
-                <span class="text-green-400 ml-1">${task.success_count || 0}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Failures:</span>
-                <span class="text-red-400 ml-1">${task.failure_count || 0}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">Last Update:</span>
-                <span class="text-white ml-1">${lastHeartbeat}</span>
-              </div>
+            <div class="text-sm text-gray-400 mb-2">${escapeHtml(task.description || '')}</div>
+            <div class="flex items-center gap-4 text-xs flex-wrap mb-2">
+              <span class="text-gray-500">Progress: <span class="text-white">${task.progress_current || 0}${task.progress_total ? '/' + task.progress_total : ''}</span></span>
+              <span class="text-gray-500">Success: <span class="text-green-400">${task.success_count || 0}</span></span>
+              <span class="text-gray-500">Failures: <span class="text-red-400">${task.failure_count || 0}</span></span>
+              <span class="text-gray-500">Last Update: <span class="text-white">${lastHeartbeat}</span></span>
+              ${msgBadge}
             </div>
             ${task.status === 'running' && task.progress_total ? `
               <div class="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div class="h-full bg-green-500 transition-all" style="width: ${progressPct}%"></div>
               </div>
             ` : ''}
+            <!-- Thread container (hidden by default) -->
+            <div id="thread-${safeKey}" class="hidden mt-3 pt-3 border-t border-gray-600/50">
+              <div class="text-gray-500 text-sm">Loading messages...</div>
+            </div>
           </div>
         `;
       }
       
       container.innerHTML = html;
+
+      // Re-expand any threads that were open before re-render
+      for (const taskKey of expandedThreads) {
+        const threadEl = document.getElementById('thread-' + taskKey);
+        if (threadEl) {
+          threadEl.classList.remove('hidden');
+          loadMessages(taskKey).then(msgs => {
+            renderThreadContent(threadEl, taskKey, msgs);
+          });
+        }
+      }
     }
     
     // Control ongoing task (start/stop/pause/resume)
@@ -1536,19 +1555,26 @@
 
         if (error) throw error;
 
-        // If sending a blocking message, update task to blocked (only if currently running/approved)
+        // If sending a blocking message, update task to blocked
         if (isBlocking) {
+          // Try task_queue first (regular tasks)
           await supabase
             .from('task_queue')
             .update({ status: 'blocked', updated_at: new Date().toISOString() })
             .eq('task_key', taskKey)
             .in('status', ['running', 'approved']);
+          // Also try ongoing_tasks (ongoing tasks — pauses them when blocked)
+          await supabase
+            .from('ongoing_tasks')
+            .update({ status: 'paused', updated_at: new Date().toISOString() })
+            .eq('task_key', taskKey)
+            .eq('status', 'running');
         }
 
-        // Clear cache and re-render
+        // Clear cache and re-render both views
         delete messageCache[taskKey];
         input.value = '';
-        await loadTaskQueue();
+        await Promise.all([loadTaskQueue(), loadOngoingTasks()]);
       } catch (err) {
         console.error('Error sending message:', err);
         alert('Failed to send message: ' + err.message);
@@ -1591,11 +1617,17 @@
             .update({ status: 'running', updated_at: new Date().toISOString() })
             .eq('task_key', taskKey)
             .eq('status', 'blocked');
+          // Also resume ongoing tasks that were paused due to blocking
+          await supabase
+            .from('ongoing_tasks')
+            .update({ status: 'running', updated_at: new Date().toISOString() })
+            .eq('task_key', taskKey)
+            .eq('status', 'paused');
         }
 
-        // Clear cache and re-render
+        // Clear cache and re-render both views
         delete messageCache[taskKey];
-        await loadTaskQueue();
+        await Promise.all([loadTaskQueue(), loadOngoingTasks()]);
       } catch (err) {
         console.error('Error resolving message:', err);
       }

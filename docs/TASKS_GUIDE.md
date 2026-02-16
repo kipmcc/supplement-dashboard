@@ -336,6 +336,33 @@ The Ongoing sub-tab shows long-running background processes from the `ongoing_ta
 
 **Note:** The dashboard only updates the database status. Actual process control (kill, SIGSTOP, etc.) must happen server-side or via the executing agent.
 
+### Message Threads on Ongoing Tasks
+
+Ongoing tasks support the same message thread UI as regular tasks:
+
+- **💬 badge** on each card shows total message count and blocking count
+- Click the badge to expand/collapse the thread
+- **Send** a message as Kip (human) — stored in `task_messages` with the ongoing task's `task_key`
+- **🚫 Block** sends a blocking message and pauses the ongoing task (`status = 'paused'`)
+- **✓ Resolve** on a blocking message resumes the task (`status = 'running'`) if no remaining blockers
+
+#### Agent polling for ongoing task messages
+
+Agents running ongoing processes should poll `task_messages` for their `task_key`, same as regular tasks:
+
+```sql
+-- Check for new human messages on your ongoing task
+SELECT * FROM task_messages
+WHERE task_key = 'social-media-daily-engagement'
+  AND sender_type = 'human'
+ORDER BY created_at DESC LIMIT 5;
+
+-- Check for unresolved blocking messages (task is paused)
+SELECT * FROM task_messages
+WHERE task_key = 'social-media-daily-engagement'
+  AND is_blocking = true AND is_resolved = false;
+```
+
 ### Creating an ongoing task
 ```sql
 INSERT INTO ongoing_tasks (task_key, title, description, process_command, status)
