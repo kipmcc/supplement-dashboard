@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-16 by Maureen — ongoing tasks now support message threads (same as regular tasks)*
+*Last updated: 2026-02-16 08:00 CST by Maureen — cross-agent task linking & auto-resolution (linked_task_key)*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---
@@ -463,10 +463,11 @@ SELECT COUNT(*) FROM canonical_products WHERE front_label_url IS NOT NULL;
 ```
 
 ### task_queue
-Granular task tracking.
+Granular task tracking. Supports cross-agent linking via `linked_task_key`.
 ```sql
-SELECT task_key, title, status, owner FROM task_queue WHERE status != 'complete';
+SELECT task_key, title, status, owner, linked_task_key FROM task_queue WHERE status != 'complete';
 ```
+**Cross-agent cascade:** When a task with `linked_task_key` is marked complete, the dashboard auto-unblocks the linked task, resolves its blocking messages, and posts a resolution message. See `docs/TASKS_GUIDE.md` for details.
 
 ### agents
 Dynamic agent registry. Drives agent selector pills and owner sections.

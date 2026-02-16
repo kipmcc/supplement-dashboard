@@ -215,6 +215,27 @@ ORDER BY created_at DESC LIMIT 1;
 
 **Do NOT block** for: progress updates, FYI messages, minor decisions you can make yourself, things you can retry.
 
+### Cross-Agent Task Handoffs (linked_task_key)
+
+When you need something from Kip (or another person) that requires a separate task:
+
+**Step 1:** Block your own task (as above).
+
+**Step 2:** Create a task in Kip's queue with `linked_task_key` pointing back to your blocked task:
+
+```sql
+INSERT INTO task_queue (task_key, title, description, owner, status, priority, project_key, linked_task_key)
+VALUES ('kip-review-thing', 'Review thing for [agent]', 'Context and what is needed',
+        'kip', 'pending', 2, 'your-project-key', 'your-blocked-task-key');
+```
+
+**Step 3:** When Kip completes his task via the dashboard, the system automatically:
+- Unblocks your task (`blocked` → `running`)
+- Resolves your blocking messages
+- Posts a resolution message in your task's thread with Kip's result
+
+**Detecting resolution:** Same as above — poll for `status = 'running'`, or check for messages where `sender = 'kip' AND message LIKE '[Auto]%'`.
+
 ---
 
 ## 6. Project Management

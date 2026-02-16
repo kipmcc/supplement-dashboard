@@ -453,3 +453,52 @@ window.loadOngoingTasks();
 When a task has a `project_key`, the card displays a **project badge** showing the parent project's title (resolved via `projectLookup`). This provides at-a-glance context for which project a task belongs to. Clicking the badge navigates to the Projects tab filtered to that project.
 
 Project cards on the Projects tab also show **richer status aggregation** — they count tasks in each status (including `blocked`) and display a breakdown of pending, approved, running, blocked, and completed tasks for the project.
+
+---
+
+## Cross-Agent Task Handoffs (`linked_task_key`)
+
+When an agent needs something from another person (e.g. Kip), the cross-agent handoff flow is:
+
+### The Flow
+
+1. **Agent blocks itself:** Posts a blocking message on its own task → task status becomes `blocked`
+2. **Agent creates a linked task:** Inserts a new task in the other person's queue with `linked_task_key` pointing back to the blocked task
+3. **Person completes their task:** When they click "✓ Mark Complete" on the dashboard, the system automatically:
+   - Marks the linked task as `running` (unblocked)
+   - Resolves all unresolved blocking messages on the linked task
+   - Posts a resolution message in the linked task's thread with the completed task title and result summary
+
+### Creating Linked Tasks (SQL)
+
+```sql
+-- Step 1: Agent's task becomes blocked
+UPDATE task_queue SET status = 'blocked' WHERE task_key = 'agent-task-key';
+INSERT INTO task_messages (task_key, sender, sender_type, message, is_blocking)
+VALUES ('agent-task-key', 'maureen', 'agent', 'Need Kip to review X before proceeding', true);
+
+-- Step 2: Create task in Kip's queue with linked_task_key
+INSERT INTO task_queue (task_key, title, description, owner, status, priority, project_key, linked_task_key)
+VALUES ('kip-review-x', 'Review X for Maureen', 'She needs input on X to proceed with Y',
+        'kip', 'pending', 2, 'project-key', 'agent-task-key');
+```
+
+### Polling for Resolution (Agent Side)
+
+```sql
+-- Check if your blocked task was unblocked
+SELECT status FROM task_queue WHERE task_key = 'agent-task-key';
+-- status = 'running' means Kip completed the linked task
+
+-- Get the resolution message for context
+SELECT message FROM task_messages
+WHERE task_key = 'agent-task-key' AND sender = 'kip' AND message LIKE '[Auto]%'
+ORDER BY created_at DESC LIMIT 1;
+```
+
+### Important Notes
+
+- **One level only:** No chaining of linked tasks. Keep it simple.
+- **Cascade only triggers on Mark Complete:** The auto-unblock only fires when the linked task is completed via the dashboard's "Mark Complete" button.
+- **Non-destructive:** Tasks without `linked_task_key` are unaffected — existing completion flow is unchanged.
+- **Visual indicator:** Tasks with `linked_task_key` show a purple 🔗 badge on their card.

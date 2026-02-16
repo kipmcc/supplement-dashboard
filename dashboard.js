@@ -1225,6 +1225,7 @@
                 ${msgBadge}
               </div>
               ${task.result_summary ? `<div class="mt-2 text-xs text-emerald-400">✓ ${escapeHtml(task.result_summary)}</div>` : ''}
+              ${task.linked_task_key ? `<div class="mt-1 text-xs text-purple-400">🔗 Linked: ${escapeHtml(task.linked_task_key)}</div>` : ''}
               ${task.error_message ? `<div class="mt-2 text-xs text-red-400">⚠️ ${escapeHtml(task.error_message)}</div>` : ''}
             </div>
             <div class="flex gap-2 flex-shrink-0">
@@ -1367,9 +1368,21 @@
     }
     
     // Mark task complete (for human tasks or manual completion)
+    // If the task has a linked_task_key, triggers cross-agent cascade:
+    //   1. Unblocks the linked task (blocked → running)
+    //   2. Resolves blocking messages on the linked task
+    //   3. Posts a resolution message in the linked task's thread
     async function completeTask(taskKey) {
       const summary = prompt('Result summary (optional):');
       try {
+        // First, fetch the task to check for linked_task_key
+        const { data: task, error: fetchErr } = await supabase
+          .from('task_queue')
+          .select('task_key, title, linked_task_key')
+          .eq('task_key', taskKey)
+          .single();
+        if (fetchErr) throw fetchErr;
+
         const updates = {
           status: 'complete',
           completed_at: new Date().toISOString(),
@@ -1383,10 +1396,60 @@
           .eq('task_key', taskKey);
         
         if (error) throw error;
+
+        // Cross-agent cascade: if this task has a linked_task_key, auto-unblock it
+        if (task.linked_task_key) {
+          await handleLinkedTaskCascade(task.linked_task_key, task.title, summary);
+        }
+
         await loadTaskQueue();
       } catch (error) {
         console.error('Error completing task:', error);
         alert('Failed to complete task: ' + error.message);
+      }
+    }
+
+    // Cross-agent task cascade: unblock linked task, resolve its blockers, post resolution message
+    async function handleLinkedTaskCascade(linkedTaskKey, completedTitle, resultSummary) {
+      try {
+        // 1. Update linked task: blocked → running
+        await supabase
+          .from('task_queue')
+          .update({ status: 'running', updated_at: new Date().toISOString() })
+          .eq('task_key', linkedTaskKey)
+          .eq('status', 'blocked');
+
+        // 2. Resolve all unresolved blocking messages on the linked task
+        await supabase
+          .from('task_messages')
+          .update({
+            is_resolved: true,
+            resolved_by: 'kip',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('task_key', linkedTaskKey)
+          .eq('is_blocking', true)
+          .eq('is_resolved', false);
+
+        // 3. Post a resolution message in the linked task's thread
+        const resolutionMsg = `[Auto] Kip resolved linked task: ${completedTitle}. Result: ${resultSummary || 'No summary provided.'}`;
+        await supabase
+          .from('task_messages')
+          .insert({
+            task_key: linkedTaskKey,
+            sender: 'kip',
+            sender_type: 'human',
+            message: resolutionMsg,
+            is_blocking: false,
+            is_resolved: false
+          });
+
+        // Clear message cache for the linked task so it re-renders
+        delete messageCache[linkedTaskKey];
+        console.log(`[Cascade] Unblocked linked task ${linkedTaskKey} after completing ${completedTitle}`);
+      } catch (err) {
+        console.error('[Cascade] Error in linked task cascade:', err);
+        // Don't throw — the main task was already completed successfully
       }
     }
     

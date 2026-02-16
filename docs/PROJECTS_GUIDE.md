@@ -210,6 +210,10 @@ WHERE project_key = 'my-project' AND is_project = true;
 
 ---
 
+## Cross-Agent Coordination
+
+Tasks within a project can use `linked_task_key` for cross-agent handoffs. When an agent task is blocked and needs human input, the agent creates a linked task in Kip's queue. Completing Kip's task auto-unblocks the agent's task. See `docs/TASKS_GUIDE.md` → "Cross-Agent Task Handoffs" for full details.
+
 ## Browser API
 
 ```javascript
