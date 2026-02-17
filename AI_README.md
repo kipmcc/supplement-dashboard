@@ -1,6 +1,6 @@
 # AI Operations Manual — Supplement Dashboard
 
-*Last updated: 2026-02-16 08:00 CST by Maureen — cross-agent task linking & auto-resolution (linked_task_key)*
+*Last updated: 2026-02-16 22:18 CST by Maureen — per-post comments/messaging on content queue cards*
 *This file is the single source of truth for AI agents operating on this system.*
 
 ---

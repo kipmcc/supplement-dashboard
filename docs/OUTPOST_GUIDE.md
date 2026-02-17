@@ -13,8 +13,11 @@ The Outpost tab replaces the former separate "Signal Path" and "Content" tabs. I
 ### 📋 Queue
 Content approval workflow. Shows all items from `content_queue` with status filters (Pending, Draft, Approved, Scheduled, Published, Rejected). Features:
 - Platform icons and content previews
-- One-click approve/reject
+- One-click approve/reject with feedback
 - Bulk action bar (select multiple → approve/reject all)
+- **💬 Per-post threaded comments** — message count badge on each card, expandable thread section
+- **Modal-based rejection flow** — "What needs to change?" textarea, feedback saved as `content_messages` record
+- **Revision support** — `revised` status for agent resubmissions after rejection, full thread history preserved
 - Schedule button on approved items (opens optimal time picker)
 
 ### 📅 Calendar
@@ -44,6 +47,7 @@ Auto-generated recommendations based on performance and content data:
 
 ## Data Sources
 - `content_queue` — posts, statuses, scheduled times
+- `content_messages` — per-post threaded comments (content_id, sender, sender_type, message, created_at)
 - `signal_path_events` — GA4 event data
 - `signal_path_channel_summary` (view)
 - `signal_path_article_scorecard` (view)
