@@ -65,6 +65,9 @@
         <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           🔄 Pipeline
         </button>
+        <button onclick="switchTab('signalpath')" id="tab-signalpath" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          📡 Signal Path
+        </button>
         <button onclick="window.location.href='/asciiflow/index.html'" id="tab-asciiflow" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           ✏️ Diagrams
         </button>
@@ -97,6 +100,9 @@
       }
       if (tabName === 'pipeline' && window.loadPipeline) {
         window.loadPipeline();
+      }
+      if (tabName === 'signalpath' && window.loadSignalPath) {
+        window.loadSignalPath();
       }
     }
   </script>
@@ -734,6 +740,62 @@
       </div>
 
     </div><!-- End Pipeline Tab -->
+
+    <!-- ==================== SIGNAL PATH TAB ==================== -->
+    <div id="content-signalpath" class="tab-content">
+
+      <!-- Attribution Funnel -->
+      <section class="mb-6">
+        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <span class="mr-2">🔗</span> Attribution Funnel
+        </h2>
+        <div id="spFunnel" class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div class="loading text-gray-400 text-sm">Loading funnel data...</div>
+        </div>
+      </section>
+
+      <!-- Channel Summary -->
+      <section class="mb-6">
+        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <span class="mr-2">📡</span> Channel Summary
+        </h2>
+        <div id="spChannels" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="loading text-gray-400 text-sm">Loading channels...</div>
+        </div>
+      </section>
+
+      <!-- Top Articles -->
+      <section class="mb-6">
+        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <span class="mr-2">📰</span> Top Articles by Conversion
+        </h2>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div id="spArticles" class="space-y-3">
+            <div class="loading text-gray-400 text-sm">Loading articles...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Daily Trend -->
+      <section class="mb-6">
+        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <span class="mr-2">📈</span> Daily Article Reads
+        </h2>
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div class="h-64">
+            <canvas id="spTrendCanvas"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Refresh -->
+      <div class="mt-6 text-center">
+        <button onclick="loadSignalPath()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+          🔄 Refresh Signal Path
+        </button>
+      </div>
+
+    </div><!-- End Signal Path Tab -->
 
     <!-- Diagrams tab navigates to /asciiflow/index.html (full-screen AviFlow) -->
 

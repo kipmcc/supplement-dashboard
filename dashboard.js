@@ -2421,6 +2421,201 @@
     
     window.loadPipeline = loadPipeline;
 
+    // ==================== SIGNAL PATH TAB ====================
+    let spTrendChart = null;
+
+    async function loadSignalPath() {
+      console.log('[SignalPath] Loading...');
+      await Promise.all([
+        loadSPFunnel(),
+        loadSPChannels(),
+        loadSPArticles(),
+        loadSPTrend(),
+      ]);
+    }
+
+    async function loadSPFunnel() {
+      const el = document.getElementById('spFunnel');
+      try {
+        const { data, error } = await supabase
+          .from('signal_path_attribution')
+          .select('sessions,sessions_with_reads,sessions_with_product_views,sessions_with_clicks');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          el.innerHTML = '<div class="text-gray-500 text-center py-8">No data yet — events will appear here once Signal Path tracking is live.</div>';
+          return;
+        }
+        // Aggregate across all rows
+        const t = data.reduce((a, r) => ({
+          sessions: a.sessions + (r.sessions || 0),
+          reads: a.reads + (r.sessions_with_reads || 0),
+          views: a.views + (r.sessions_with_product_views || 0),
+          clicks: a.clicks + (r.sessions_with_clicks || 0),
+        }), { sessions: 0, reads: 0, views: 0, clicks: 0 });
+
+        const steps = [
+          { label: 'Sessions', value: t.sessions, color: 'blue' },
+          { label: 'Article Reads', value: t.reads, color: 'purple' },
+          { label: 'Product Views', value: t.views, color: 'amber' },
+          { label: 'Outbound Clicks', value: t.clicks, color: 'green' },
+        ];
+        const maxVal = Math.max(t.sessions, 1);
+
+        el.innerHTML = `
+          <div class="flex flex-col sm:flex-row items-stretch gap-3">
+            ${steps.map((s, i) => {
+              const pct = Math.round((s.value / maxVal) * 100);
+              const convRate = i > 0 ? (steps[i-1].value > 0 ? ((s.value / steps[i-1].value) * 100).toFixed(1) + '%' : '0%') : '';
+              return `
+                <div class="flex-1 relative">
+                  ${i > 0 ? `<div class="hidden sm:block absolute -left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg">→</div>` : ''}
+                  <div class="bg-gray-700/50 rounded-lg p-4 text-center border border-gray-600">
+                    <div class="text-xs text-gray-400 uppercase tracking-wide">${s.label}</div>
+                    <div class="text-2xl font-bold ${tw(s.color,'text400')} mt-1">${s.value.toLocaleString()}</div>
+                    ${convRate ? `<div class="text-xs text-gray-400 mt-1">${convRate} from prev</div>` : ''}
+                    <div class="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div class="h-full ${tw(s.color,'bg600')} rounded-full" style="width:${pct}%"></div>
+                    </div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
+      } catch (e) {
+        console.error('[SignalPath] Funnel error:', e);
+        el.innerHTML = `<div class="text-red-400 text-sm">Error loading funnel: ${e.message}</div>`;
+      }
+    }
+
+    async function loadSPChannels() {
+      const el = document.getElementById('spChannels');
+      try {
+        const { data, error } = await supabase
+          .from('signal_path_channel_summary')
+          .select('*')
+          .order('total_sessions', { ascending: false });
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          el.innerHTML = '<div class="text-gray-500 text-center py-8 col-span-full">No channel data yet.</div>';
+          return;
+        }
+        el.innerHTML = data.map(ch => `
+          <div class="metric-card bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-semibold text-white text-sm">${escapeHtml(ch.source)}</span>
+              <span class="text-xs text-gray-500">${escapeHtml(ch.medium)}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-center">
+              <div><div class="text-lg font-bold text-blue-400">${(ch.total_sessions || 0).toLocaleString()}</div><div class="text-[10px] text-gray-500">Sessions</div></div>
+              <div><div class="text-lg font-bold text-purple-400">${(ch.total_reads || 0).toLocaleString()}</div><div class="text-[10px] text-gray-500">Reads</div></div>
+              <div><div class="text-lg font-bold text-amber-400">${(ch.total_product_views || 0).toLocaleString()}</div><div class="text-[10px] text-gray-500">Product Views</div></div>
+              <div><div class="text-lg font-bold text-green-400">${(ch.total_outbound_clicks || 0).toLocaleString()}</div><div class="text-[10px] text-gray-500">Clicks</div></div>
+            </div>
+            <div class="mt-2 text-xs text-gray-500 text-center">Conv: ${ch.overall_conversion_rate ? (ch.overall_conversion_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('[SignalPath] Channels error:', e);
+        el.innerHTML = `<div class="text-red-400 text-sm col-span-full">Error: ${e.message}</div>`;
+      }
+    }
+
+    async function loadSPArticles() {
+      const el = document.getElementById('spArticles');
+      try {
+        const { data, error } = await supabase
+          .from('signal_path_article_scorecard')
+          .select('*')
+          .order('outbound_clicks', { ascending: false })
+          .limit(15);
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          el.innerHTML = '<div class="text-gray-500 text-center py-8">No article data yet.</div>';
+          return;
+        }
+        el.innerHTML = data.map((a, i) => {
+          const convPct = a.read_to_product_rate ? (a.read_to_product_rate * 100).toFixed(1) + '%' : 'N/A';
+          const clickPct = a.product_to_click_rate ? (a.product_to_click_rate * 100).toFixed(1) + '%' : 'N/A';
+          return `
+            <div class="flex items-center gap-3 p-3 bg-gray-700/30 rounded-lg">
+              <div class="text-lg font-bold text-gray-500 w-8 text-center">${i + 1}</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-white text-sm truncate">${escapeHtml(a.article_title || a.article_slug)}</div>
+                <div class="text-xs text-gray-400 mt-1 flex flex-wrap gap-3">
+                  <span>📖 ${(a.reads || 0).toLocaleString()} reads</span>
+                  <span>👁 ${(a.product_views || 0).toLocaleString()} views</span>
+                  <span>🔗 ${(a.outbound_clicks || 0).toLocaleString()} clicks</span>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-sm font-semibold text-purple-400">${convPct}</div>
+                <div class="text-[10px] text-gray-500">read→view</div>
+                <div class="text-sm font-semibold text-green-400">${clickPct}</div>
+                <div class="text-[10px] text-gray-500">view→click</div>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('[SignalPath] Articles error:', e);
+        el.innerHTML = `<div class="text-red-400 text-sm">Error: ${e.message}</div>`;
+      }
+    }
+
+    async function loadSPTrend() {
+      try {
+        const { data, error } = await supabase
+          .from('signal_path_attribution')
+          .select('event_date,sessions_with_reads')
+          .order('event_date', { ascending: true });
+        if (error) throw error;
+
+        const canvas = document.getElementById('spTrendCanvas');
+        if (!canvas) return;
+
+        if (spTrendChart) { spTrendChart.destroy(); spTrendChart = null; }
+
+        if (!data || data.length === 0) {
+          canvas.parentElement.innerHTML = '<div class="text-gray-500 text-center py-16">No trend data yet.</div>';
+          return;
+        }
+
+        // Aggregate by date
+        const byDate = {};
+        data.forEach(r => {
+          byDate[r.event_date] = (byDate[r.event_date] || 0) + (r.sessions_with_reads || 0);
+        });
+        const labels = Object.keys(byDate).sort();
+        const values = labels.map(d => byDate[d]);
+
+        spTrendChart = new Chart(canvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Article Reads',
+              data: values,
+              backgroundColor: 'rgba(139,92,246,0.6)',
+              borderColor: 'rgba(139,92,246,1)',
+              borderWidth: 1,
+              borderRadius: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#9ca3af', maxTicksLimit: 10 }, grid: { color: 'rgba(75,85,99,0.3)' } },
+              y: { beginAtZero: true, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(75,85,99,0.3)' } },
+            },
+          },
+        });
+      } catch (e) {
+        console.error('[SignalPath] Trend error:', e);
+      }
+    }
+
+    window.loadSignalPath = loadSignalPath;
+
     // Expose for button and debugging
     window.refreshAll = refreshAll;
     window.dashboardInit = init;
