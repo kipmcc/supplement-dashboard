@@ -2619,6 +2619,141 @@
     // ─── Content Approval Queue ───
     window.contentFilter = 'pending_approval';
 
+    // Content messages state
+    let contentMessageCounts = {};
+    let contentMessageCache = {};
+    let expandedContentThreads = new Set();
+
+    async function loadContentMessageCounts(contentIds) {
+      if (!contentIds.length) return;
+      try {
+        const { data, error } = await supabase.from('content_messages').select('content_id').in('content_id', contentIds);
+        if (error) throw error;
+        contentMessageCounts = {};
+        contentIds.forEach(id => { contentMessageCounts[id] = 0; });
+        (data || []).forEach(r => { contentMessageCounts[r.content_id] = (contentMessageCounts[r.content_id] || 0) + 1; });
+      } catch (err) {
+        console.warn('[Dashboard] Could not load content message counts:', err.message);
+      }
+    }
+
+    async function loadContentMessages(contentId) {
+      if (contentMessageCache[contentId]) return contentMessageCache[contentId];
+      try {
+        const { data, error } = await supabase
+          .from('content_messages')
+          .select('*')
+          .eq('content_id', contentId)
+          .order('created_at', { ascending: true });
+        if (error) throw error;
+        contentMessageCache[contentId] = data || [];
+        return contentMessageCache[contentId];
+      } catch (err) {
+        console.warn('[Dashboard] Could not load content messages:', err.message);
+        return [];
+      }
+    }
+
+    function toggleContentThread(contentId) {
+      const container = document.getElementById('content-thread-' + contentId);
+      if (!container) return;
+      if (expandedContentThreads.has(contentId)) {
+        expandedContentThreads.delete(contentId);
+        container.classList.add('hidden');
+      } else {
+        expandedContentThreads.add(contentId);
+        container.classList.remove('hidden');
+        loadContentMessages(contentId).then(msgs => renderContentThreadContent(container, contentId, msgs));
+      }
+    }
+
+    function renderContentThreadContent(container, contentId, messages) {
+      let html = '';
+      if (messages.length === 0) {
+        html += '<div class="text-gray-500 text-sm mb-3">No messages yet.</div>';
+      } else {
+        html += '<div class="space-y-2 max-h-64 overflow-y-auto mb-3">';
+        for (const msg of messages) {
+          const time = new Date(msg.created_at).toLocaleString();
+          const isHuman = msg.sender_type === 'human';
+          const senderColor = isHuman ? 'text-blue-400' : 'text-green-400';
+          const senderIcon = isHuman ? '👤' : '🤖';
+
+          let renderedMsg;
+          if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            renderedMsg = DOMPurify.sanitize(marked.parse(msg.message));
+          } else {
+            renderedMsg = escapeHtml(msg.message).replace(/\n/g, '<br>');
+          }
+
+          html += `
+            <div class="p-2 rounded bg-gray-800/50">
+              <div class="flex items-center gap-2 text-xs text-gray-400 mb-1">
+                <span class="${senderColor} font-medium">${senderIcon} ${escapeHtml(msg.sender)}</span>
+                <span>·</span><span>${time}</span>
+              </div>
+              <div class="text-sm text-gray-300">${renderedMsg}</div>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      html += `
+        <div class="flex gap-2">
+          <input id="content-msg-input-${contentId}" type="text" placeholder="Add a comment..."
+            class="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+            onkeydown="if(event.key==='Enter')sendContentMessage('${contentId}')">
+          <button onclick="sendContentMessage('${contentId}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium text-white">Send</button>
+        </div>`;
+
+      container.innerHTML = html;
+      // Scroll to bottom of messages
+      const msgsDiv = container.querySelector('.max-h-64');
+      if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
+    }
+
+    let sendingContentMessage = false;
+    async function sendContentMessage(contentId, messageText) {
+      if (sendingContentMessage) return;
+      let text = messageText;
+      if (!text) {
+        const input = document.getElementById('content-msg-input-' + contentId);
+        if (!input) return;
+        text = input.value.trim();
+        if (!text) return;
+      }
+
+      sendingContentMessage = true;
+      try {
+        const { error } = await supabase.from('content_messages').insert({
+          content_id: contentId,
+          sender: 'kip',
+          sender_type: 'human',
+          message: text
+        });
+        if (error) throw error;
+
+        delete contentMessageCache[contentId];
+        const msgs = await loadContentMessages(contentId);
+        contentMessageCounts[contentId] = msgs.length;
+        const container = document.getElementById('content-thread-' + contentId);
+        if (container && expandedContentThreads.has(contentId)) {
+          renderContentThreadContent(container, contentId, msgs);
+        }
+        // Update badge
+        const badge = document.getElementById('content-msg-badge-' + contentId);
+        if (badge) badge.textContent = msgs.length;
+      } catch (err) {
+        console.error('Error sending content message:', err);
+        alert('Failed to send message: ' + err.message);
+      } finally {
+        sendingContentMessage = false;
+      }
+    }
+
+    window.toggleContentThread = toggleContentThread;
+    window.sendContentMessage = sendContentMessage;
+
     const platformIcons = {
       twitter: '🐦', linkedin: '💼', instagram: '📸', reddit: '🤖',
       facebook: '👤', tiktok: '🎵', youtube: '▶️', threads: '🧵', newsletter: '📧'
@@ -2631,6 +2766,7 @@
       scheduled: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
       published: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
       rejected: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+      revised: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
     };
 
     async function loadContentQueue() {
@@ -2662,7 +2798,7 @@
         const statsEl = document.getElementById('contentStats');
         counts.scheduled = counts.scheduled || 0;
         (allItems || []).forEach(i => { if (i.status === 'scheduled') counts.scheduled = (counts.scheduled || 0) + 1; });
-        const statsLabels = { draft: 'Draft', pending_approval: 'Pending', approved: 'Approved', scheduled: 'Scheduled', published: 'Published', rejected: 'Rejected' };
+        const statsLabels = { draft: 'Draft', pending_approval: 'Pending', approved: 'Approved', scheduled: 'Scheduled', published: 'Published', rejected: 'Rejected', revised: 'Revised' };
         statsEl.innerHTML = Object.entries(counts).map(([s, c]) => {
           const sc = statusColors[s] || statusColors.draft;
           return `<div class="bg-gray-800 rounded-lg p-3 border ${(sc || {}).border || 'border-gray-500/30'}">
@@ -2703,7 +2839,20 @@
           return;
         }
 
+        // Load message counts for all visible items
+        const contentIds = items.map(i => i.id);
+        await loadContentMessageCounts(contentIds);
+
         container.innerHTML = items.map(item => renderContentCard(item)).join('');
+
+        // Re-expand threads that were open
+        for (const cid of expandedContentThreads) {
+          const threadEl = document.getElementById('content-thread-' + cid);
+          if (threadEl) {
+            threadEl.classList.remove('hidden');
+            loadContentMessages(cid).then(msgs => renderContentThreadContent(threadEl, cid, msgs));
+          }
+        }
 
       } catch (err) {
         console.error('[Content] Error loading queue:', err);
@@ -2796,7 +2945,7 @@
       const sc = statusColors[item.status] || statusColors.draft;
       const ps = platformStyles[item.platform] || { icon: '📄', name: item.platform, color: '#6B7280', gradient: 'linear-gradient(135deg, #374151, #4B5563)', handle: '' };
       const ago = timeAgo(new Date(item.created_at));
-      const showActions = item.status === 'pending_approval' || item.status === 'draft';
+      const showActions = item.status === 'pending_approval' || item.status === 'draft' || item.status === 'revised';
 
       // Format badge
       const fmt = formatLabels[item.format] || '';
@@ -2873,8 +3022,17 @@
         </div>
 
         <!-- Actions -->
-        <div class="px-4 pb-4">
+        <div class="px-4 pb-3">
           ${actionsHtml}
+        </div>
+
+        <!-- Thread toggle + messages -->
+        <div class="px-4 pb-4">
+          <button onclick="toggleContentThread('${item.id}')" class="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+            💬 <span id="content-msg-badge-${item.id}">${contentMessageCounts[item.id] || 0}</span> comments
+            <span class="text-gray-600">${expandedContentThreads.has(item.id) ? '▼' : '▶'}</span>
+          </button>
+          <div id="content-thread-${item.id}" class="hidden mt-3 pt-3 border-t border-gray-600/50"></div>
         </div>
       </div>`;
     }
@@ -2995,13 +3153,49 @@
     }
 
     async function rejectContent(id) {
-      const reason = prompt('Rejection reason (optional):');
+      // Show rejection modal with feedback input
+      const existing = document.getElementById('rejectModal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'rejectModal';
+      modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-red-500/30 shadow-2xl">
+          <h3 class="text-lg font-bold text-red-400 mb-2">❌ Reject Content</h3>
+          <p class="text-sm text-gray-400 mb-4">What needs to change? This feedback will be visible to the agent.</p>
+          <textarea id="rejectFeedback" rows="4" placeholder="e.g. Tone is too salesy, needs more evidence citations..."
+            class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-red-500 focus:outline-none resize-none mb-4"></textarea>
+          <div class="flex gap-3">
+            <button onclick="document.getElementById('rejectModal').remove()" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white">Cancel</button>
+            <button onclick="confirmRejectContent('${id}')" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium text-white">Reject</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      setTimeout(() => document.getElementById('rejectFeedback')?.focus(), 100);
+    }
+
+    async function confirmRejectContent(id) {
+      const feedback = document.getElementById('rejectFeedback')?.value?.trim();
+      document.getElementById('rejectModal')?.remove();
+
+      // Update status to rejected
       const update = { status: 'rejected', updated_at: new Date().toISOString() };
-      if (reason) update.error_message = reason;
+      if (feedback) update.error_message = feedback;
       const { error } = await supabase.from('content_queue').update(update).eq('id', id);
       if (error) { alert('Error: ' + error.message); return; }
+
+      // Save feedback as a content message
+      if (feedback) {
+        await sendContentMessage(id, feedback);
+      }
+
+      // Auto-expand the thread so feedback is visible
+      expandedContentThreads.add(id);
       loadContentQueue();
     }
+
+    window.confirmRejectContent = confirmRejectContent;
 
     async function markPublished(id) {
       const url = prompt('Published URL (optional):');
