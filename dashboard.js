@@ -2628,6 +2628,7 @@
       draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' },
       pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
       approved: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
+      scheduled: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
       published: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
       rejected: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
     };
@@ -2659,14 +2660,43 @@
         (allItems || []).forEach(i => { if (counts[i.status] !== undefined) counts[i.status]++; });
 
         const statsEl = document.getElementById('contentStats');
+        counts.scheduled = counts.scheduled || 0;
+        (allItems || []).forEach(i => { if (i.status === 'scheduled') counts.scheduled = (counts.scheduled || 0) + 1; });
+        const statsLabels = { draft: 'Draft', pending_approval: 'Pending', approved: 'Approved', scheduled: 'Scheduled', published: 'Published', rejected: 'Rejected' };
         statsEl.innerHTML = Object.entries(counts).map(([s, c]) => {
           const sc = statusColors[s] || statusColors.draft;
-          const labels = { draft: 'Draft', pending_approval: 'Pending', approved: 'Approved', published: 'Published', rejected: 'Rejected' };
-          return `<div class="bg-gray-800 rounded-lg p-3 border ${sc.border}">
-            <div class="text-2xl font-bold ${sc.text}">${c}</div>
-            <div class="text-xs text-gray-400">${labels[s]}</div>
+          return `<div class="bg-gray-800 rounded-lg p-3 border ${(sc || {}).border || 'border-gray-500/30'}">
+            <div class="text-2xl font-bold ${(sc || {}).text || 'text-gray-400'}">${c}</div>
+            <div class="text-xs text-gray-400">${statsLabels[s] || s}</div>
           </div>`;
         }).join('');
+
+        // Render upcoming schedule timeline
+        const { data: scheduledItems } = await supabase.from('content_queue')
+          .select('id,title,platform,scheduled_at,status')
+          .eq('status', 'scheduled')
+          .not('scheduled_at', 'is', null)
+          .order('scheduled_at', { ascending: true })
+          .limit(10);
+
+        const timelineEl = document.getElementById('contentTimeline');
+        const timelineItemsEl = document.getElementById('timelineItems');
+        if (scheduledItems && scheduledItems.length > 0) {
+          timelineEl.classList.remove('hidden');
+          timelineItemsEl.innerHTML = scheduledItems.map(si => {
+            const dt = new Date(si.scheduled_at);
+            const icon = platformIcons[si.platform] || '📄';
+            const dayStr = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            return `<div class="flex-shrink-0 bg-purple-900/30 border border-purple-700/40 rounded-lg p-3 min-w-[140px]">
+              <div class="text-xs text-gray-400">${dayStr}</div>
+              <div class="text-sm font-bold text-purple-300">${timeStr}</div>
+              <div class="text-xs text-gray-300 mt-1 truncate max-w-[120px]">${icon} ${escapeHtml(si.title || 'Untitled')}</div>
+            </div>`;
+          }).join('');
+        } else {
+          timelineEl.classList.add('hidden');
+        }
 
         if (!items?.length) {
           container.innerHTML = '<div class="text-gray-500 text-sm py-8 text-center">No content items found for this filter.</div>';
@@ -2697,8 +2727,13 @@
                 <button onclick="approveContent('${item.id}')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs font-medium text-white">✅ Approve</button>
                 <button onclick="rejectContent('${item.id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium text-white">❌ Reject</button>
               </div>` : ''}
-              ${item.status === 'approved' ? `<div class="shrink-0">
+              ${item.status === 'approved' ? `<div class="flex flex-col gap-2 shrink-0">
+                <button onclick="scheduleContent('${item.id}','${item.platform}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium text-white">📅 Schedule</button>
                 <button onclick="markPublished('${item.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium text-white">🚀 Published</button>
+              </div>` : ''}
+              ${item.status === 'scheduled' ? `<div class="flex flex-col gap-2 shrink-0">
+                <div class="text-xs text-purple-400">📅 ${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : 'Pending'}</div>
+                <button onclick="scheduleContent('${item.id}','${item.platform}')" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium text-white">✏️ Reschedule</button>
               </div>` : ''}
             </div>
           </div>`;
@@ -2718,6 +2753,103 @@
       if (hrs < 24) return `${hrs}h ago`;
       const days = Math.round(hrs / 24);
       return `${days}d ago`;
+    }
+
+    // Late.dev account IDs
+    const LATE_ACCOUNTS = {
+      instagram: '698a719b4525118cee8a96d9',
+      tiktok: '698a72e94525118cee8a9777',
+      twitter: '698a71e54525118cee8a9706',
+    };
+
+    // Optimal posting times by platform (hour in CT)
+    const OPTIMAL_TIMES = {
+      twitter:   { days: [1,2,3,4,5], slots: ['08:00','09:00','10:00','12:00','12:30','13:00'], label: 'Mon-Fri 8-10 AM, 12-1 PM CT' },
+      linkedin:  { days: [2,3,4],     slots: ['08:00','09:00','10:00','12:00'],                 label: 'Tue-Thu 8-10 AM, 12 PM CT' },
+      instagram: { days: [1,2,3,4,5], slots: ['11:00','12:00','13:00','19:00','20:00','21:00'], label: 'Mon-Fri 11 AM-1 PM, 7-9 PM CT' },
+      tiktok:    { days: [1,2,3,4,5], slots: ['12:00','17:00','19:00','21:00'],                 label: 'Mon-Fri 12 PM, 5 PM, 7-9 PM CT' },
+      facebook:  { days: [1,2,3,4,5], slots: ['09:00','12:00','15:00'],                         label: 'Mon-Fri 9 AM, 12 PM, 3 PM CT' },
+      reddit:    { days: [1,2,3,4,5], slots: ['08:00','12:00'],                                 label: 'Mon-Fri 8 AM, 12 PM CT' },
+    };
+
+    function getNextOptimalSlots(platform, count = 5) {
+      const config = OPTIMAL_TIMES[platform];
+      if (!config) return [];
+      const now = new Date();
+      const slots = [];
+      for (let dayOffset = 0; dayOffset < 14 && slots.length < count; dayOffset++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() + dayOffset);
+        const dow = d.getDay();
+        if (!config.days.includes(dow)) continue;
+        for (const time of config.slots) {
+          const [h, m] = time.split(':').map(Number);
+          const slot = new Date(d);
+          slot.setHours(h, m, 0, 0);
+          if (slot > now) {
+            slots.push(slot);
+            if (slots.length >= count) break;
+          }
+        }
+      }
+      return slots;
+    }
+
+    function formatSlot(dt) {
+      return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+        ' ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    async function scheduleContent(id, platform) {
+      const config = OPTIMAL_TIMES[platform] || {};
+      const slots = getNextOptimalSlots(platform, 6);
+      const accountId = LATE_ACCOUNTS[platform] || '';
+
+      let slotsHtml = slots.map((s, i) =>
+        `<button onclick="document.getElementById('schedInput-${id}').value='${s.toISOString().slice(0,16)}';this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('ring-2'));this.classList.add('ring-2','ring-green-400')" class="px-2 py-1 bg-green-700/30 hover:bg-green-600/40 rounded text-xs text-green-300">${formatSlot(s)}</button>`
+      ).join('');
+
+      const modal = document.createElement('div');
+      modal.id = 'schedModal';
+      modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center';
+      modal.innerHTML = `
+        <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full border border-gray-600 shadow-xl">
+          <h3 class="text-lg font-bold text-white mb-3">📅 Schedule Post</h3>
+          <p class="text-sm text-gray-400 mb-1">Platform: <span class="text-white capitalize">${platform}</span></p>
+          ${config.label ? `<p class="text-xs text-green-400 mb-3">💡 Best times: ${config.label}</p>` : ''}
+          <div class="mb-3">
+            <label class="text-xs text-gray-400 block mb-1">Suggested slots:</label>
+            <div class="flex flex-wrap gap-2">${slotsHtml || '<span class="text-gray-500 text-xs">No suggestions for this platform</span>'}</div>
+          </div>
+          <div class="mb-4">
+            <label class="text-xs text-gray-400 block mb-1">Or pick a custom time:</label>
+            <input id="schedInput-${id}" type="datetime-local" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white">
+          </div>
+          <div class="flex gap-2 justify-end">
+            <button onclick="document.getElementById('schedModal').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">Cancel</button>
+            <button onclick="confirmSchedule('${id}','${platform}')" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-medium">✅ Schedule</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+
+    async function confirmSchedule(id, platform) {
+      const input = document.getElementById('schedInput-' + id);
+      if (!input || !input.value) { alert('Please select a date/time'); return; }
+
+      const scheduledAt = new Date(input.value).toISOString();
+      const accountId = LATE_ACCOUNTS[platform] || null;
+
+      const { error } = await supabase.from('content_queue').update({
+        status: 'scheduled',
+        scheduled_at: scheduledAt,
+        publish_channel: accountId,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+
+      document.getElementById('schedModal')?.remove();
+      if (error) { alert('Error: ' + error.message); return; }
+      loadContentQueue();
     }
 
     async function approveContent(id) {
@@ -2750,6 +2882,8 @@
     window.approveContent = approveContent;
     window.rejectContent = rejectContent;
     window.markPublished = markPublished;
+    window.scheduleContent = scheduleContent;
+    window.confirmSchedule = confirmSchedule;
 
     // Expose for button and debugging
     window.refreshAll = refreshAll;
