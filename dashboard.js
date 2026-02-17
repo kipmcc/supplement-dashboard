@@ -2703,46 +2703,180 @@
           return;
         }
 
-        container.innerHTML = items.map(item => {
-          const sc = statusColors[item.status] || statusColors.draft;
-          const icon = platformIcons[item.platform] || '📄';
-          const ago = timeAgo(new Date(item.created_at));
-          const bodyPreview = escapeHtml((item.body || '').substring(0, 280));
-          const showActions = item.status === 'pending_approval' || item.status === 'draft';
-
-          return `<div class="bg-gray-800 rounded-lg p-4 border ${sc.border} hover:border-opacity-60 transition-all">
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1 flex-wrap">
-                  <span class="text-lg">${icon}</span>
-                  <span class="font-semibold text-white text-sm">${escapeHtml(item.title || 'Untitled')}</span>
-                  <span class="px-2 py-0.5 rounded text-xs ${sc.bg} ${sc.text}">${item.status.replace('_', ' ')}</span>
-                  <span class="text-xs text-gray-500">${escapeHtml(item.content_type || item.platform)}</span>
-                  <span class="text-xs text-gray-600">${ago}</span>
-                </div>
-                ${item.source_article_id ? `<div class="text-xs text-gray-500 mb-2">📎 Source: ${escapeHtml(item.source_article_id)}</div>` : ''}
-                <div class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${bodyPreview}${(item.body || '').length > 280 ? '<span class="text-gray-500">…</span>' : ''}</div>
-              </div>
-              ${showActions ? `<div class="flex flex-col gap-2 shrink-0">
-                <button onclick="approveContent('${item.id}')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs font-medium text-white">✅ Approve</button>
-                <button onclick="rejectContent('${item.id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium text-white">❌ Reject</button>
-              </div>` : ''}
-              ${item.status === 'approved' ? `<div class="flex flex-col gap-2 shrink-0">
-                <button onclick="scheduleContent('${item.id}','${item.platform}')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium text-white">📅 Schedule</button>
-                <button onclick="markPublished('${item.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium text-white">🚀 Published</button>
-              </div>` : ''}
-              ${item.status === 'scheduled' ? `<div class="flex flex-col gap-2 shrink-0">
-                <div class="text-xs text-purple-400">📅 ${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : 'Pending'}</div>
-                <button onclick="scheduleContent('${item.id}','${item.platform}')" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium text-white">✏️ Reschedule</button>
-              </div>` : ''}
-            </div>
-          </div>`;
-        }).join('');
+        container.innerHTML = items.map(item => renderContentCard(item)).join('');
 
       } catch (err) {
         console.error('[Content] Error loading queue:', err);
         container.innerHTML = `<div class="text-red-400 text-sm">Error: ${err.message}</div>`;
       }
+    }
+
+    // Platform styling config for rich content cards
+    const platformStyles = {
+      instagram: { icon: '📸', name: 'Instagram', color: '#E1306C', gradient: 'linear-gradient(135deg, #833AB4, #FD1D1D, #FCB045)', handle: '@maureenvalecmo' },
+      linkedin:  { icon: '💼', name: 'LinkedIn',  color: '#0A66C2', gradient: 'linear-gradient(135deg, #0A66C2, #0077B5)', handle: 'Maureen Vale' },
+      twitter:   { icon: '𝕏',  name: 'X / Twitter', color: '#000000', gradient: 'linear-gradient(135deg, #14171A, #657786)', handle: '@MaureenValeCMO' },
+      reddit:    { icon: '🤖', name: 'Reddit',    color: '#FF5700', gradient: 'linear-gradient(135deg, #FF5700, #FF8717)', handle: 'u/AviadorResearch' },
+      facebook:  { icon: '📘', name: 'Facebook',  color: '#1877F2', gradient: 'linear-gradient(135deg, #1877F2, #42A5F5)', handle: 'Aviado Health' },
+      tiktok:    { icon: '🎵', name: 'TikTok',    color: '#69C9D0', gradient: 'linear-gradient(135deg, #000000, #25F4EE)', handle: '@aviado_health' },
+      youtube:   { icon: '▶️', name: 'YouTube',   color: '#FF0000', gradient: 'linear-gradient(135deg, #FF0000, #CC0000)', handle: '@AviadoHealth' },
+      pinterest: { icon: '📌', name: 'Pinterest', color: '#E60023', gradient: 'linear-gradient(135deg, #E60023, #BD081C)', handle: 'Aviado' },
+    };
+
+    const formatLabels = {
+      carousel: '📐 Carousel', single_image: '📷 Single Image', text_post: '📝 Text Post',
+      thread: '🧵 Thread', story: '📱 Story', reel: '🎬 Reel',
+    };
+
+    function getCharLimit(platform) {
+      const limits = { twitter: 280, linkedin: 3000, instagram: 2200, reddit: 40000, facebook: 63206, tiktok: 4000 };
+      return limits[platform] || 5000;
+    }
+
+    function charCountBadge(text, platform) {
+      const len = (text || '').length;
+      const limit = getCharLimit(platform);
+      const pct = len / limit;
+      const color = pct > 0.95 ? 'text-red-400 bg-red-500/20' : pct > 0.8 ? 'text-amber-400 bg-amber-500/20' : 'text-green-400 bg-green-500/20';
+      return `<span class="px-1.5 py-0.5 rounded text-xs ${color}">${len}/${limit}</span>`;
+    }
+
+    function renderPlatformPreview(item, ps) {
+      const body = escapeHtml((item.body || '').substring(0, 300));
+      const truncated = (item.body || '').length > 300 ? '<span class="text-gray-500">…</span>' : '';
+      const imgThumb = item.image_url ? `<div class="mt-2 rounded overflow-hidden" style="max-height:120px"><img src="${escapeHtml(item.image_url)}" class="w-full object-cover rounded" style="max-height:120px" onerror="this.style.display='none'"></div>` : '';
+
+      if (item.platform === 'instagram') {
+        return `<div class="bg-black rounded-lg border border-gray-700 overflow-hidden mt-2">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
+            <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-[8px]">M</div>
+            <span class="text-xs font-semibold text-white">maureenvalecmo</span>
+          </div>
+          ${imgThumb || '<div class="bg-gray-900 h-28 flex items-center justify-center text-gray-600 text-xs">📷 Image preview</div>'}
+          <div class="px-3 py-2">
+            <div class="flex gap-3 text-gray-400 text-sm mb-1.5">♡ 💬 ➤</div>
+            <div class="text-xs text-gray-300 leading-relaxed"><b class="text-white">maureenvalecmo</b> ${body}${truncated}</div>
+          </div>
+        </div>`;
+      }
+      if (item.platform === 'linkedin') {
+        return `<div class="bg-white rounded-lg border border-gray-300 overflow-hidden mt-2">
+          <div class="flex items-center gap-2 px-3 py-2">
+            <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">MV</div>
+            <div><div class="text-xs font-semibold text-gray-900">Maureen Vale</div><div class="text-[10px] text-gray-500">CMO at Aviado · 1h</div></div>
+          </div>
+          <div class="px-3 pb-2 text-xs text-gray-800 leading-relaxed">${body}${truncated}</div>
+          ${imgThumb}
+          <div class="flex gap-4 px-3 py-2 border-t border-gray-200 text-[10px] text-gray-500">
+            <span>👍 Like</span><span>💬 Comment</span><span>🔄 Repost</span><span>➤ Send</span>
+          </div>
+        </div>`;
+      }
+      if (item.platform === 'twitter') {
+        return `<div class="bg-black rounded-lg border border-gray-700 overflow-hidden mt-2 p-3">
+          <div class="flex items-start gap-2">
+            <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs font-bold shrink-0">MV</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1"><span class="text-xs font-bold text-white">Maureen Vale</span><span class="text-[10px] text-gray-500">@MaureenValeCMO · 1h</span></div>
+              <div class="text-xs text-gray-200 leading-relaxed mt-1">${body}${truncated}</div>
+              ${imgThumb}
+              <div class="flex gap-6 mt-2 text-[10px] text-gray-500">💬 12 &nbsp; 🔄 5 &nbsp; ♡ 42 &nbsp; 📊 1.2K</div>
+            </div>
+          </div>
+        </div>`;
+      }
+      // Generic fallback
+      return `<div class="bg-gray-900 rounded-lg border border-gray-700 p-3 mt-2">
+        <div class="text-xs text-gray-300 leading-relaxed">${body}${truncated}</div>
+        ${imgThumb}
+      </div>`;
+    }
+
+    function renderContentCard(item) {
+      const sc = statusColors[item.status] || statusColors.draft;
+      const ps = platformStyles[item.platform] || { icon: '📄', name: item.platform, color: '#6B7280', gradient: 'linear-gradient(135deg, #374151, #4B5563)', handle: '' };
+      const ago = timeAgo(new Date(item.created_at));
+      const showActions = item.status === 'pending_approval' || item.status === 'draft';
+
+      // Format badge
+      const fmt = formatLabels[item.format] || '';
+      let formatBadge = '';
+      if (fmt) {
+        let extra = '';
+        if (item.format === 'carousel' && item.slide_count) extra = ` · ${item.slide_count} slides`;
+        if (item.aspect_ratio) extra += ` · ${item.aspect_ratio}`;
+        formatBadge = `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-700 text-gray-300">${fmt}${extra}</span>`;
+      }
+
+      // Hashtags
+      const hashtagsHtml = (item.hashtags && item.hashtags.length) ?
+        `<div class="flex flex-wrap gap-1 mt-2">${item.hashtags.map(h => `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-700/80 text-blue-300">${escapeHtml(h)}</span>`).join('')}</div>` : '';
+
+      // Website indicator
+      const websiteHtml = item.website_included === true ?
+        `<span class="text-xs text-green-400">🌐 aviado.com in caption ✅</span>` :
+        item.website_included === false ? `<span class="text-xs text-amber-400">🌐 Bio link only ⚠️</span>` : '';
+
+      // Source
+      const sourceHtml = item.source_article_id ? `<div class="text-xs text-gray-500">🔗 Source: ${escapeHtml(item.source_article_id)}</div>` : '';
+
+      // Action buttons
+      let actionsHtml = '';
+      if (showActions) {
+        actionsHtml = `<div class="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+          <button onclick="approveContent('${item.id}')" class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-xs font-medium text-white transition-colors">✅ Approve</button>
+          <button onclick="rejectContent('${item.id}')" class="flex-1 px-3 py-2 bg-red-600/80 hover:bg-red-700 rounded-lg text-xs font-medium text-white transition-colors">❌ Reject</button>
+        </div>`;
+      } else if (item.status === 'approved') {
+        actionsHtml = `<div class="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+          <button onclick="scheduleContent('${item.id}','${item.platform}')" class="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs font-medium text-white transition-colors">📅 Schedule</button>
+          <button onclick="markPublished('${item.id}')" class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium text-white transition-colors">🚀 Published</button>
+        </div>`;
+      } else if (item.status === 'scheduled') {
+        actionsHtml = `<div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-700/50">
+          <div class="text-xs text-purple-400 flex-1">📅 ${item.scheduled_at ? new Date(item.scheduled_at).toLocaleString() : 'Pending'}</div>
+          <button onclick="scheduleContent('${item.id}','${item.platform}')" class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-xs font-medium text-white">✏️ Reschedule</button>
+        </div>`;
+      }
+
+      return `<div class="rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-black/20" style="border-left: 4px solid ${ps.color}; background: #1f2937;">
+        <!-- Header -->
+        <div class="px-4 pt-4 pb-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">${ps.icon}</span>
+              <span class="font-bold text-sm" style="color: ${ps.color}">${ps.name}</span>
+              ${formatBadge}
+              ${charCountBadge(item.body, item.platform)}
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs ${sc.bg} ${sc.text}">${(item.status || '').replace('_', ' ')}</span>
+              <span class="text-xs text-gray-500">${ago}</span>
+            </div>
+          </div>
+          <div class="text-sm font-semibold text-white mt-2">${escapeHtml(item.title || 'Untitled')}</div>
+        </div>
+
+        <!-- Platform Preview -->
+        <div class="px-4">
+          ${renderPlatformPreview(item, ps)}
+        </div>
+
+        <!-- Meta -->
+        <div class="px-4 py-2 space-y-1">
+          ${sourceHtml}
+          ${hashtagsHtml}
+          <div class="flex items-center gap-3 flex-wrap">
+            ${websiteHtml}
+            <span class="text-xs text-gray-500">⏰ ${new Date(item.created_at).toLocaleString()}</span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="px-4 pb-4">
+          ${actionsHtml}
+        </div>
+      </div>`;
     }
 
     function timeAgo(date) {
