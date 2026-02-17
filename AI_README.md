@@ -15,7 +15,7 @@ Each dashboard tab has a detailed guide for AI agents. These are living document
 | **Projects** | [`docs/PROJECTS_GUIDE.md`](docs/PROJECTS_GUIDE.md) | Project lifecycle, STATUS.md, subtasks |
 | **Tasks** | [`docs/TASKS_GUIDE.md`](docs/TASKS_GUIDE.md) | Task queue, approval workflow, ongoing tasks |
 | **Pipeline** | [`docs/PIPELINE_GUIDE.md`](docs/PIPELINE_GUIDE.md) | Pipeline health, content queue, throughput |
-| **Signal Path** | [`docs/SIGNAL_PATH_GUIDE.md`](docs/SIGNAL_PATH_GUIDE.md) | Attribution funnel, channel summary, article scorecard, trends |
+| **🚀 Outpost** | [`docs/OUTPOST_GUIDE.md`](docs/OUTPOST_GUIDE.md) | Queue, Calendar, Performance, Insights — unified content lifecycle |
 | **Diagrams** | [`asciiflow/AVIFLOW_GUIDE.md`](asciiflow/AVIFLOW_GUIDE.md) | AviFlow editor, Supabase API, drawing guide |
 
 **Rule: If you change a tab, update its guide.**

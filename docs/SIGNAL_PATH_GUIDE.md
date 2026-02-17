@@ -1,4 +1,8 @@
-# Signal Path Tab Guide — For AI Agents
+# Signal Path
+
+> **Note:** Signal Path is now located inside the **🚀 Outpost** tab under the **📊 Performance** sub-view. The standalone Signal Path tab has been removed.
+
+# Signal Path (Legacy Reference) Tab Guide — For AI Agents
 
 *How to read and operate the Signal Path (attribution) tab.*
 
