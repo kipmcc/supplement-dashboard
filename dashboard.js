@@ -2616,6 +2616,141 @@
 
     window.loadSignalPath = loadSignalPath;
 
+    // ─── Content Approval Queue ───
+    window.contentFilter = 'pending_approval';
+
+    const platformIcons = {
+      twitter: '🐦', linkedin: '💼', instagram: '📸', reddit: '🤖',
+      facebook: '👤', tiktok: '🎵', youtube: '▶️', threads: '🧵', newsletter: '📧'
+    };
+
+    const statusColors = {
+      draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' },
+      pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+      approved: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
+      published: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+      rejected: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+    };
+
+    async function loadContentQueue() {
+      const container = document.getElementById('contentList');
+      if (!container) return;
+      container.innerHTML = '<div class="loading text-gray-400 text-sm">Loading content queue...</div>';
+
+      try {
+        let query = supabase.from('content_queue').select('*').order('created_at', { ascending: false });
+
+        const filter = window.contentFilter || 'pending_approval';
+        if (filter !== 'all') {
+          query = query.eq('status', filter);
+        }
+
+        const platformFilter = document.getElementById('contentPlatformFilter')?.value;
+        if (platformFilter && platformFilter !== 'all') {
+          query = query.eq('platform', platformFilter);
+        }
+
+        const { data: items, error } = await query.limit(50);
+        if (error) throw error;
+
+        // Load stats
+        const { data: allItems } = await supabase.from('content_queue').select('status');
+        const counts = { draft: 0, pending_approval: 0, approved: 0, published: 0, rejected: 0 };
+        (allItems || []).forEach(i => { if (counts[i.status] !== undefined) counts[i.status]++; });
+
+        const statsEl = document.getElementById('contentStats');
+        statsEl.innerHTML = Object.entries(counts).map(([s, c]) => {
+          const sc = statusColors[s] || statusColors.draft;
+          const labels = { draft: 'Draft', pending_approval: 'Pending', approved: 'Approved', published: 'Published', rejected: 'Rejected' };
+          return `<div class="bg-gray-800 rounded-lg p-3 border ${sc.border}">
+            <div class="text-2xl font-bold ${sc.text}">${c}</div>
+            <div class="text-xs text-gray-400">${labels[s]}</div>
+          </div>`;
+        }).join('');
+
+        if (!items?.length) {
+          container.innerHTML = '<div class="text-gray-500 text-sm py-8 text-center">No content items found for this filter.</div>';
+          return;
+        }
+
+        container.innerHTML = items.map(item => {
+          const sc = statusColors[item.status] || statusColors.draft;
+          const icon = platformIcons[item.platform] || '📄';
+          const ago = timeAgo(new Date(item.created_at));
+          const bodyPreview = escapeHtml((item.body || '').substring(0, 280));
+          const showActions = item.status === 'pending_approval' || item.status === 'draft';
+
+          return `<div class="bg-gray-800 rounded-lg p-4 border ${sc.border} hover:border-opacity-60 transition-all">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-lg">${icon}</span>
+                  <span class="font-semibold text-white text-sm">${escapeHtml(item.title || 'Untitled')}</span>
+                  <span class="px-2 py-0.5 rounded text-xs ${sc.bg} ${sc.text}">${item.status.replace('_', ' ')}</span>
+                  <span class="text-xs text-gray-500">${escapeHtml(item.content_type || item.platform)}</span>
+                  <span class="text-xs text-gray-600">${ago}</span>
+                </div>
+                ${item.source_article_id ? `<div class="text-xs text-gray-500 mb-2">📎 Source: ${escapeHtml(item.source_article_id)}</div>` : ''}
+                <div class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${bodyPreview}${(item.body || '').length > 280 ? '<span class="text-gray-500">…</span>' : ''}</div>
+              </div>
+              ${showActions ? `<div class="flex flex-col gap-2 shrink-0">
+                <button onclick="approveContent('${item.id}')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs font-medium text-white">✅ Approve</button>
+                <button onclick="rejectContent('${item.id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium text-white">❌ Reject</button>
+              </div>` : ''}
+              ${item.status === 'approved' ? `<div class="shrink-0">
+                <button onclick="markPublished('${item.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium text-white">🚀 Published</button>
+              </div>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+
+      } catch (err) {
+        console.error('[Content] Error loading queue:', err);
+        container.innerHTML = `<div class="text-red-400 text-sm">Error: ${err.message}</div>`;
+      }
+    }
+
+    function timeAgo(date) {
+      const mins = Math.round((Date.now() - date.getTime()) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      const days = Math.round(hrs / 24);
+      return `${days}d ago`;
+    }
+
+    async function approveContent(id) {
+      const { error } = await supabase.from('content_queue').update({
+        status: 'approved', approved_by: 'kip', approved_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      }).eq('id', id);
+      if (error) { alert('Error: ' + error.message); return; }
+      loadContentQueue();
+    }
+
+    async function rejectContent(id) {
+      const reason = prompt('Rejection reason (optional):');
+      const update = { status: 'rejected', updated_at: new Date().toISOString() };
+      if (reason) update.error_message = reason;
+      const { error } = await supabase.from('content_queue').update(update).eq('id', id);
+      if (error) { alert('Error: ' + error.message); return; }
+      loadContentQueue();
+    }
+
+    async function markPublished(id) {
+      const url = prompt('Published URL (optional):');
+      const update = { status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      if (url) update.published_url = url;
+      const { error } = await supabase.from('content_queue').update(update).eq('id', id);
+      if (error) { alert('Error: ' + error.message); return; }
+      loadContentQueue();
+    }
+
+    window.loadContentQueue = loadContentQueue;
+    window.approveContent = approveContent;
+    window.rejectContent = rejectContent;
+    window.markPublished = markPublished;
+
     // Expose for button and debugging
     window.refreshAll = refreshAll;
     window.dashboardInit = init;
