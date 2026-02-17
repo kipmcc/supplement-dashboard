@@ -2885,6 +2885,460 @@
     window.scheduleContent = scheduleContent;
     window.confirmSchedule = confirmSchedule;
 
+    // ==================== OUTPOST COMMAND CENTER ====================
+
+    let currentOutpostTab = 'queue';
+    let calWeekOffset = 0;
+    let queueSelectedIds = new Set();
+    let spDateRange = 7;
+
+    function switchOutpostTab(tab) {
+      currentOutpostTab = tab;
+      document.querySelectorAll('.outpost-pill').forEach(p => p.classList.remove('active'));
+      document.getElementById('outpost-pill-' + tab)?.classList.add('active');
+      document.querySelectorAll('.outpost-sub').forEach(s => s.classList.remove('active'));
+      // Small delay for transition effect
+      setTimeout(() => {
+        document.getElementById('outpost-' + tab)?.classList.add('active');
+      }, 50);
+      // Load data
+      if (tab === 'queue') loadContentQueue();
+      else if (tab === 'calendar') loadCalendar();
+      else if (tab === 'performance') loadSignalPath();
+      else if (tab === 'insights') loadInsights();
+    }
+
+    function loadOutpost() {
+      switchOutpostTab(currentOutpostTab);
+    }
+
+    // ─── Bulk Actions ───
+    function toggleQueueSelect(id) {
+      if (queueSelectedIds.has(id)) queueSelectedIds.delete(id);
+      else queueSelectedIds.add(id);
+      updateBulkBar();
+    }
+
+    function updateBulkBar() {
+      const bar = document.getElementById('queueBulkBar');
+      const countEl = document.getElementById('queueSelectedCount');
+      if (queueSelectedIds.size > 0) {
+        bar?.classList.remove('hidden');
+        if (countEl) countEl.textContent = queueSelectedIds.size;
+      } else {
+        bar?.classList.add('hidden');
+      }
+      // Update checkbox visuals
+      document.querySelectorAll('.queue-cb').forEach(cb => {
+        cb.checked = queueSelectedIds.has(cb.dataset.id);
+      });
+    }
+
+    function clearQueueSelection() {
+      queueSelectedIds.clear();
+      updateBulkBar();
+    }
+
+    async function bulkApproveContent() {
+      if (!confirm(`Approve ${queueSelectedIds.size} items?`)) return;
+      for (const id of queueSelectedIds) {
+        await supabase.from('content_queue').update({
+          status: 'approved', approved_by: 'kip', approved_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        }).eq('id', id);
+      }
+      queueSelectedIds.clear();
+      loadContentQueue();
+    }
+
+    async function bulkRejectContent() {
+      if (!confirm(`Reject ${queueSelectedIds.size} items?`)) return;
+      for (const id of queueSelectedIds) {
+        await supabase.from('content_queue').update({
+          status: 'rejected', updated_at: new Date().toISOString()
+        }).eq('id', id);
+      }
+      queueSelectedIds.clear();
+      loadContentQueue();
+    }
+
+    window.toggleQueueSelect = toggleQueueSelect;
+    window.bulkApproveContent = bulkApproveContent;
+    window.bulkRejectContent = bulkRejectContent;
+    window.clearQueueSelection = clearQueueSelection;
+
+    // ─── CALENDAR ───
+
+    const PLATFORM_COLORS = {
+      twitter: '#1d9bf0', linkedin: '#0a66c2', instagram: '#e1306c',
+      reddit: '#ff4500', facebook: '#1877f2', tiktok: '#25D366',
+      youtube: '#ff0000', threads: '#000', newsletter: '#6366f1',
+    };
+
+    function getWeekDates(offset) {
+      const now = new Date();
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + (offset * 7));
+      monday.setHours(0, 0, 0, 0);
+      const dates = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        dates.push(d);
+      }
+      return dates;
+    }
+
+    function isOptimalSlot(platform, dayOfWeek, hour) {
+      const rules = OPTIMAL_TIMES[platform];
+      if (!rules) return false;
+      if (!rules.days.includes(dayOfWeek)) return false;
+      return rules.slots.some(s => parseInt(s.split(':')[0]) === hour);
+    }
+
+    async function loadCalendar() {
+      const dates = getWeekDates(calWeekOffset);
+      const start = dates[0].toISOString();
+      const endDate = new Date(dates[6]);
+      endDate.setHours(23, 59, 59, 999);
+      const end = endDate.toISOString();
+
+      // Update label
+      const labelEl = document.getElementById('calWeekLabel');
+      if (labelEl) {
+        const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        labelEl.textContent = `${fmt(dates[0])} – ${fmt(dates[6])}`;
+      }
+
+      // Fetch scheduled/approved posts for this week
+      let posts = [];
+      try {
+        const { data, error } = await supabase.from('content_queue')
+          .select('id,title,platform,scheduled_at,status,body')
+          .in('status', ['scheduled', 'approved', 'published'])
+          .not('scheduled_at', 'is', null)
+          .gte('scheduled_at', start)
+          .lte('scheduled_at', end)
+          .order('scheduled_at');
+        if (!error && data) posts = data;
+      } catch (e) { console.error('[Calendar] Error:', e); }
+
+      // Check for gap alerts
+      renderGapAlerts(posts, dates);
+
+      // Build grid
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      const hours = [];
+      for (let h = 6; h <= 22; h++) hours.push(h);
+
+      let html = '<div class="cal-grid" style="min-width:700px">';
+      // Header row
+      html += '<div class="cal-cell bg-gray-900 p-2"></div>';
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      dates.forEach((d, i) => {
+        const isToday = d.toISOString().split('T')[0] === todayStr;
+        html += `<div class="cal-cell bg-gray-900 p-2 text-center ${isToday ? 'border-b-2 border-blue-500' : ''}">
+          <div class="text-xs text-gray-400">${dayNames[i]}</div>
+          <div class="text-sm font-bold ${isToday ? 'text-blue-400' : 'text-white'}">${d.getDate()}</div>
+        </div>`;
+      });
+
+      // Time rows
+      for (const h of hours) {
+        // Time label
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+        html += `<div class="cal-cell bg-gray-900/50 p-1 text-right pr-2">
+          <span class="text-[10px] text-gray-500">${h12} ${ampm}</span>
+        </div>`;
+
+        // Day cells
+        dates.forEach((d, di) => {
+          const isToday = d.toISOString().split('T')[0] === todayStr;
+          const dow = d.getDay();
+          // Check if any platform has optimal time here
+          const anyOptimal = ['twitter', 'linkedin', 'instagram', 'tiktok', 'facebook', 'reddit'].some(p => isOptimalSlot(p, dow, h));
+          const cellPosts = posts.filter(p => {
+            const pd = new Date(p.scheduled_at);
+            return pd.toISOString().split('T')[0] === d.toISOString().split('T')[0] && pd.getHours() === h;
+          });
+          const classes = [
+            'cal-cell',
+            anyOptimal ? 'optimal' : '',
+            isToday ? 'today-col' : ''
+          ].filter(Boolean).join(' ');
+
+          html += `<div class="${classes}" onclick="calCellClick('${d.toISOString().split('T')[0]}',${h})">`;
+          for (const post of cellPosts) {
+            const color = PLATFORM_COLORS[post.platform] || '#6366f1';
+            html += `<div class="cal-post" style="background:${color}33;border-left:3px solid ${color};color:${color}" 
+              onclick="event.stopPropagation();calPostClick('${post.id}')" title="${escapeHtml(post.title || 'Untitled')}">
+              ${platformIcons[post.platform] || '📄'} ${escapeHtml((post.title || 'Untitled').substring(0, 20))}
+            </div>`;
+          }
+          // Today time indicator
+          if (isToday && today.getHours() === h) {
+            const minutePct = (today.getMinutes() / 60) * 100;
+            html += `<div class="absolute left-0 right-0 border-t-2 border-red-500" style="top:${minutePct}%"><div class="w-2 h-2 rounded-full bg-red-500 -mt-1 -ml-1"></div></div>`;
+          }
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+
+      document.getElementById('calendarGrid').innerHTML = html;
+    }
+
+    function renderGapAlerts(posts, dates) {
+      const el = document.getElementById('calGapAlerts');
+      if (!el) return;
+      // Check for platforms with no posts in the week
+      const platforms = ['twitter', 'linkedin', 'instagram'];
+      const alerts = [];
+      for (const plat of platforms) {
+        const platPosts = posts.filter(p => p.platform === plat);
+        if (platPosts.length === 0) {
+          alerts.push(`<div class="inline-flex items-center gap-2 px-3 py-1.5 bg-red-900/30 border border-red-700/40 rounded-lg text-xs text-red-300">
+            <span class="animate-pulse">🔴</span> ${platformIcons[plat] || ''} ${plat} has no posts scheduled this week
+          </div>`);
+        }
+      }
+      el.innerHTML = alerts.length > 0 ? `<div class="flex flex-wrap gap-2">${alerts.join('')}</div>` : '';
+    }
+
+    function calNavigate(dir) {
+      if (dir === 0) calWeekOffset = 0;
+      else calWeekOffset += dir;
+      loadCalendar();
+    }
+
+    function calCellClick(dateStr, hour) {
+      // Quick-schedule: show approved items to pick from
+      alert(`Schedule content for ${dateStr} at ${hour}:00\n\nTip: Approve items in the Queue, then drag them here. (Quick-schedule coming soon!)`);
+    }
+
+    function calPostClick(id) {
+      // Preview post
+      alert(`Post preview for ID: ${id}\n(Full preview modal coming soon!)`);
+    }
+
+    window.switchOutpostTab = switchOutpostTab;
+    window.loadOutpost = loadOutpost;
+    window.calNavigate = calNavigate;
+    window.calCellClick = calCellClick;
+    window.calPostClick = calPostClick;
+
+    // ─── PERFORMANCE (date range) ───
+
+    function setSpRange(days) {
+      spDateRange = days;
+      [7, 30, 90].forEach(d => {
+        const el = document.getElementById('sp-range-' + d);
+        if (el) el.classList.toggle('active', d === days);
+      });
+      loadSignalPath();
+    }
+    window.setSpRange = setSpRange;
+
+    // ─── INSIGHTS ───
+
+    async function loadInsights() {
+      const container = document.getElementById('insightsContainer');
+      if (!container) return;
+      container.innerHTML = '<div class="skeleton h-48"></div>';
+
+      try {
+        // Gather data for insights
+        const [channelRes, articleRes, contentRes] = await Promise.all([
+          supabase.from('signal_path_channel_summary').select('*'),
+          supabase.from('signal_path_article_scorecard').select('*').order('outbound_clicks', { ascending: false }).limit(10),
+          supabase.from('content_queue').select('id,platform,status,scheduled_at,published_at,created_at'),
+        ]);
+
+        const channels = channelRes.data || [];
+        const articles = articleRes.data || [];
+        const content = contentRes.data || [];
+
+        const insights = [];
+
+        // Check if we have enough data
+        if (channels.length === 0 && articles.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-16">
+              <div class="text-6xl mb-4">📊</div>
+              <h3 class="text-xl font-semibold text-white mb-2">Collecting Data...</h3>
+              <p class="text-gray-400 max-w-md mx-auto">Need 2+ weeks of data to generate insights. Keep publishing! As traffic flows through Signal Path, actionable recommendations will appear here.</p>
+            </div>`;
+          return;
+        }
+
+        // Insight: Top converting content
+        if (articles.length > 0) {
+          const top = articles[0];
+          if (top.outbound_clicks > 0) {
+            insights.push({
+              type: 'green', icon: '🔥',
+              headline: `"${(top.article_title || top.article_slug || '').substring(0, 40)}" is your top converter`,
+              data: `${top.outbound_clicks} outbound clicks, ${((top.read_to_product_rate || 0) * 100).toFixed(1)}% read→view rate`,
+              action: 'Create more content on this topic'
+            });
+          }
+        }
+
+        // Insight: Best channel
+        if (channels.length > 0) {
+          const sorted = [...channels].sort((a, b) => (b.total_outbound_clicks || 0) - (a.total_outbound_clicks || 0));
+          const best = sorted[0];
+          if (best && best.total_outbound_clicks > 0) {
+            const totalClicks = sorted.reduce((s, c) => s + (c.total_outbound_clicks || 0), 0);
+            const pct = totalClicks > 0 ? Math.round((best.total_outbound_clicks / totalClicks) * 100) : 0;
+            insights.push({
+              type: 'blue', icon: '📈',
+              headline: `${best.source} drives ${pct}% of outbound clicks`,
+              data: `${best.total_outbound_clicks} clicks from ${best.total_sessions} sessions`,
+              action: 'Increase posting frequency on this channel'
+            });
+          }
+
+          // Insight: Worst channel
+          const worst = sorted[sorted.length - 1];
+          if (worst && (worst.total_outbound_clicks || 0) === 0 && worst.total_sessions > 0) {
+            insights.push({
+              type: 'amber', icon: '⚠️',
+              headline: `${worst.source} has 0 outbound clicks`,
+              data: `${worst.total_sessions} sessions but no conversions`,
+              action: 'Add product links to posts on this platform'
+            });
+          }
+        }
+
+        // Insight: Scheduling gaps
+        const scheduled = content.filter(c => c.status === 'scheduled' && c.scheduled_at);
+        const futureScheduled = scheduled.filter(c => new Date(c.scheduled_at) > new Date());
+        if (futureScheduled.length === 0) {
+          insights.push({
+            type: 'red', icon: '🚨',
+            headline: 'No posts scheduled for the future',
+            data: 'Your content pipeline is empty',
+            action: 'Approve pending content and schedule it in the Calendar'
+          });
+        } else if (futureScheduled.length < 3) {
+          insights.push({
+            type: 'amber', icon: '📅',
+            headline: `Only ${futureScheduled.length} post${futureScheduled.length > 1 ? 's' : ''} scheduled ahead`,
+            data: 'You should aim for 5+ scheduled posts at all times',
+            action: 'Queue up more content from the Queue tab'
+          });
+        }
+
+        // Insight: Pending approval backlog
+        const pending = content.filter(c => c.status === 'pending_approval');
+        if (pending.length > 5) {
+          insights.push({
+            type: 'amber', icon: '⏳',
+            headline: `${pending.length} posts waiting for approval`,
+            data: 'Content is stacking up in the review queue',
+            action: 'Head to Queue and approve or reject items'
+          });
+        }
+
+        // Insight: Best time slot
+        insights.push({
+          type: 'blue', icon: '⏰',
+          headline: 'Tuesday 9 AM is statistically your best slot',
+          data: 'Based on industry benchmarks for health/supplement content',
+          action: 'Schedule your highest-priority posts for Tue 9 AM CT'
+        });
+
+        // Content velocity
+        const published = content.filter(c => c.status === 'published' && c.published_at);
+        const oneWeekAgo = new Date(); oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const thisWeekPub = published.filter(c => new Date(c.published_at) >= oneWeekAgo).length;
+        const lastWeekPub = published.filter(c => {
+          const d = new Date(c.published_at);
+          return d >= twoWeeksAgo && d < oneWeekAgo;
+        }).length;
+
+        const typeColors = { green: 'border-green-500', amber: 'border-yellow-500', red: 'border-red-500', blue: 'border-blue-500' };
+        const typeBg = { green: 'bg-green-900/20', amber: 'bg-yellow-900/20', red: 'bg-red-900/20', blue: 'bg-blue-900/20' };
+
+        let html = '';
+
+        // Recommendation cards
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">';
+        for (const ins of insights) {
+          html += `
+            <div class="insight-card ${typeBg[ins.type]} border-l-4 ${typeColors[ins.type]} rounded-lg p-4">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">${ins.icon}</span>
+                <div class="flex-1">
+                  <h4 class="font-semibold text-white text-sm">${escapeHtml(ins.headline)}</h4>
+                  <p class="text-xs text-gray-400 mt-1">${escapeHtml(ins.data)}</p>
+                  <div class="mt-3">
+                    <span class="text-xs px-3 py-1 rounded-full bg-white/10 text-gray-300">💡 ${escapeHtml(ins.action)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }
+        html += '</div>';
+
+        // Channel health bars
+        if (channels.length > 0) {
+          html += '<h3 class="text-lg font-semibold text-white mb-3">📡 Channel Health</h3>';
+          html += '<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">';
+          const maxSessions = Math.max(...channels.map(c => c.total_sessions || 0), 1);
+          for (const ch of channels.sort((a, b) => (b.total_sessions || 0) - (a.total_sessions || 0))) {
+            const pct = Math.round(((ch.total_sessions || 0) / maxSessions) * 100);
+            const color = PLATFORM_COLORS[ch.source?.toLowerCase()] || '#6366f1';
+            html += `
+              <div class="mb-3">
+                <div class="flex items-center justify-between text-sm mb-1">
+                  <span class="text-gray-300">${platformIcons[ch.source?.toLowerCase()] || '📡'} ${escapeHtml(ch.source)} <span class="text-gray-500 text-xs">/ ${escapeHtml(ch.medium || '')}</span></span>
+                  <span class="text-gray-400">${(ch.total_sessions || 0).toLocaleString()} sessions → ${(ch.total_outbound_clicks || 0).toLocaleString()} clicks</span>
+                </div>
+                <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all" style="width:${pct}%;background:${color}"></div>
+                </div>
+              </div>`;
+          }
+          html += '</div>';
+        }
+
+        // Content velocity
+        html += '<h3 class="text-lg font-semibold text-white mb-3">🚀 Content Velocity</h3>';
+        html += '<div class="bg-gray-800 rounded-lg p-4 border border-gray-700">';
+        const velArrow = thisWeekPub > lastWeekPub ? '↑' : thisWeekPub < lastWeekPub ? '↓' : '→';
+        const velColor = thisWeekPub > lastWeekPub ? 'text-green-400' : thisWeekPub < lastWeekPub ? 'text-red-400' : 'text-gray-400';
+        html += `
+          <div class="flex items-center gap-6">
+            <div class="text-center">
+              <div class="text-3xl font-bold text-white">${thisWeekPub}</div>
+              <div class="text-xs text-gray-400">This week</div>
+            </div>
+            <div class="text-3xl ${velColor}">${velArrow}</div>
+            <div class="text-center">
+              <div class="text-3xl font-bold text-gray-500">${lastWeekPub}</div>
+              <div class="text-xs text-gray-400">Last week</div>
+            </div>
+            <div class="flex-1 text-right">
+              <div class="text-sm text-gray-400">Total published: <span class="text-white font-bold">${published.length}</span></div>
+            </div>
+          </div>`;
+        html += '</div>';
+
+        container.innerHTML = html;
+
+      } catch (err) {
+        console.error('[Insights] Error:', err);
+        container.innerHTML = `<div class="text-red-400 text-sm">Error loading insights: ${err.message}</div>`;
+      }
+    }
+
+    window.loadInsights = loadInsights;
+
     // Expose for button and debugging
     window.refreshAll = refreshAll;
     window.dashboardInit = init;

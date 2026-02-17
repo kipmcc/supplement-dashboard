@@ -28,6 +28,29 @@
     .task-card { transition: all 0.2s; }
     .task-card:hover { transform: translateX(4px); border-left-width: 4px; }
     .task-checkbox:checked + .task-label { text-decoration: line-through; opacity: 0.6; }
+    /* Outpost sub-nav */
+    .outpost-pill { transition: all 0.3s ease; padding: 8px 18px; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; background: #374151; color: #9ca3af; }
+    .outpost-pill:hover { background: #4b5563; color: #e5e7eb; }
+    .outpost-pill.active { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; border-color: rgba(139,92,246,0.5); box-shadow: 0 0 20px rgba(99,102,241,0.3); }
+    .outpost-sub { opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; transform: translateY(8px); display: none; }
+    .outpost-sub.active { opacity: 1; transform: translateY(0); display: block; }
+    /* Calendar grid */
+    .cal-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); gap: 0; }
+    .cal-cell { border: 1px solid rgba(75,85,99,0.3); min-height: 48px; position: relative; transition: background 0.2s; }
+    .cal-cell:hover { background: rgba(59,130,246,0.05); }
+    .cal-cell.optimal { background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.15); }
+    .cal-cell.today-col { background: rgba(59,130,246,0.04); }
+    .cal-post { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; margin: 2px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cal-post:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 10; position: relative; }
+    /* Insight cards */
+    .insight-card { transition: transform 0.2s, box-shadow 0.2s; }
+    .insight-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    /* Animated counters */
+    @keyframes countUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .count-anim { animation: countUp 0.5s ease-out; }
+    /* Skeleton loading */
+    .skeleton { background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
@@ -65,11 +88,8 @@
         <button onclick="switchTab('pipeline')" id="tab-pipeline" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           🔄 Pipeline
         </button>
-        <button onclick="switchTab('signalpath')" id="tab-signalpath" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
-          📡 Signal Path
-        </button>
-        <button onclick="switchTab('content')" id="tab-content" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
-          📝 Content
+        <button onclick="switchTab('outpost')" id="tab-outpost" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
+          🚀 Outpost
         </button>
         <button onclick="window.location.href='/asciiflow/index.html'" id="tab-asciiflow" class="tab-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 text-center">
           ✏️ Diagrams
@@ -104,11 +124,8 @@
       if (tabName === 'pipeline' && window.loadPipeline) {
         window.loadPipeline();
       }
-      if (tabName === 'signalpath' && window.loadSignalPath) {
-        window.loadSignalPath();
-      }
-      if (tabName === 'content' && window.loadContentQueue) {
-        window.loadContentQueue();
+      if (tabName === 'outpost' && window.loadOutpost) {
+        window.loadOutpost();
       }
     }
   </script>
@@ -747,109 +764,148 @@
 
     </div><!-- End Pipeline Tab -->
 
-    <!-- ==================== SIGNAL PATH TAB ==================== -->
-    <div id="content-signalpath" class="tab-content">
+    <!-- ==================== OUTPOST COMMAND CENTER ==================== -->
+    <div id="content-outpost" class="tab-content">
 
-      <!-- Attribution Funnel -->
-      <section class="mb-6">
-        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <span class="mr-2">🔗</span> Attribution Funnel
-        </h2>
-        <div id="spFunnel" class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <div class="loading text-gray-400 text-sm">Loading funnel data...</div>
-        </div>
-      </section>
+      <!-- Sub-navigation pills -->
+      <div class="flex items-center gap-3 mb-6">
+        <button onclick="switchOutpostTab('queue')" id="outpost-pill-queue" class="outpost-pill active">📋 Queue</button>
+        <button onclick="switchOutpostTab('calendar')" id="outpost-pill-calendar" class="outpost-pill">📅 Calendar</button>
+        <button onclick="switchOutpostTab('performance')" id="outpost-pill-performance" class="outpost-pill">📊 Performance</button>
+        <button onclick="switchOutpostTab('insights')" id="outpost-pill-insights" class="outpost-pill">💡 Insights</button>
+      </div>
 
-      <!-- Channel Summary -->
-      <section class="mb-6">
-        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <span class="mr-2">📡</span> Channel Summary
-        </h2>
-        <div id="spChannels" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="loading text-gray-400 text-sm">Loading channels...</div>
-        </div>
-      </section>
-
-      <!-- Top Articles -->
-      <section class="mb-6">
-        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <span class="mr-2">📰</span> Top Articles by Conversion
-        </h2>
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <div id="spArticles" class="space-y-3">
-            <div class="loading text-gray-400 text-sm">Loading articles...</div>
+      <!-- ===== QUEUE SUB-VIEW ===== -->
+      <div id="outpost-queue" class="outpost-sub active">
+        <!-- Bulk action bar -->
+        <div id="queueBulkBar" class="hidden mb-4 p-3 bg-blue-900/30 border border-blue-600/40 rounded-lg flex items-center justify-between">
+          <span class="text-sm text-blue-300"><span id="queueSelectedCount">0</span> items selected</span>
+          <div class="flex gap-2">
+            <button onclick="bulkApproveContent()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs font-medium">✅ Approve All</button>
+            <button onclick="bulkRejectContent()" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs font-medium">❌ Reject All</button>
+            <button onclick="clearQueueSelection()" class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium">Clear</button>
           </div>
         </div>
-      </section>
 
-      <!-- Daily Trend -->
-      <section class="mb-6">
-        <h2 class="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <span class="mr-2">📈</span> Daily Article Reads
-        </h2>
-        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <div class="h-64">
-            <canvas id="spTrendCanvas"></canvas>
+        <!-- Filters -->
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button onclick="window.contentFilter='pending_approval'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 transition-all">⏳ Pending</button>
+          <button onclick="window.contentFilter='draft'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30 transition-all">📝 Draft</button>
+          <button onclick="window.contentFilter='approved'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-all">✅ Approved</button>
+          <button onclick="window.contentFilter='scheduled'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 transition-all">📅 Scheduled</button>
+          <button onclick="window.contentFilter='published'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all">🚀 Published</button>
+          <button onclick="window.contentFilter='rejected'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all">❌ Rejected</button>
+          <button onclick="window.contentFilter='all'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 transition-all">📋 All</button>
+          <select id="contentPlatformFilter" onchange="window.loadContentQueue()" class="px-3 py-1.5 rounded-full text-xs bg-gray-800 border border-gray-600 text-gray-300">
+            <option value="all">All Platforms</option>
+            <option value="twitter">🐦 Twitter</option>
+            <option value="linkedin">💼 LinkedIn</option>
+            <option value="instagram">📸 Instagram</option>
+            <option value="reddit">🤖 Reddit</option>
+            <option value="facebook">👤 Facebook</option>
+            <option value="tiktok">🎵 TikTok</option>
+            <option value="youtube">▶️ YouTube</option>
+            <option value="threads">🧵 Threads</option>
+            <option value="newsletter">📧 Newsletter</option>
+          </select>
+        </div>
+
+        <!-- Stats bar -->
+        <div id="contentStats" class="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4"></div>
+
+        <!-- Upcoming Schedule Timeline -->
+        <div id="contentTimeline" class="mb-4 hidden">
+          <h3 class="text-sm font-semibold text-purple-400 mb-2">📅 Upcoming Schedule</h3>
+          <div id="timelineItems" class="flex gap-3 overflow-x-auto pb-2"></div>
+        </div>
+
+        <!-- Content list -->
+        <div id="contentList" class="space-y-3">
+          <div class="text-gray-400 text-sm">Select a filter to load content...</div>
+        </div>
+      </div>
+
+      <!-- ===== CALENDAR SUB-VIEW ===== -->
+      <div id="outpost-calendar" class="outpost-sub">
+        <!-- Week navigation -->
+        <div class="flex items-center justify-between mb-4">
+          <button onclick="calNavigate(-1)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">← Previous Week</button>
+          <div class="text-center">
+            <button onclick="calNavigate(0)" class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg text-sm text-blue-300 transition-colors">This Week</button>
+            <div id="calWeekLabel" class="text-xs text-gray-500 mt-1"></div>
+          </div>
+          <button onclick="calNavigate(1)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors">Next Week →</button>
+        </div>
+        <!-- Gap alerts -->
+        <div id="calGapAlerts" class="mb-4"></div>
+        <!-- Calendar grid -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+          <div id="calendarGrid" class="overflow-x-auto">
+            <div class="skeleton h-96 m-4"></div>
           </div>
         </div>
-      </section>
-
-      <!-- Refresh -->
-      <div class="mt-6 text-center">
-        <button onclick="loadSignalPath()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-          🔄 Refresh Signal Path
-        </button>
+        <!-- Legend -->
+        <div class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+          <span><span class="inline-block w-3 h-3 rounded" style="background:#1d9bf0"></span> Twitter</span>
+          <span><span class="inline-block w-3 h-3 rounded" style="background:#0a66c2"></span> LinkedIn</span>
+          <span><span class="inline-block w-3 h-3 rounded" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)"></span> Instagram</span>
+          <span><span class="inline-block w-3 h-3 rounded" style="background:#ff4500"></span> Reddit</span>
+          <span><span class="inline-block w-3 h-3 rounded" style="background:#25D366"></span> TikTok</span>
+          <span class="ml-4">🟢 = Optimal slot</span>
+        </div>
       </div>
 
-    </div><!-- End Signal Path Tab -->
+      <!-- ===== PERFORMANCE SUB-VIEW ===== -->
+      <div id="outpost-performance" class="outpost-sub">
+        <!-- Date range selector -->
+        <div class="flex items-center gap-2 mb-6">
+          <span class="text-sm text-gray-400">Period:</span>
+          <button onclick="setSpRange(7)" id="sp-range-7" class="outpost-pill active text-xs !py-1.5 !px-4">7d</button>
+          <button onclick="setSpRange(30)" id="sp-range-30" class="outpost-pill text-xs !py-1.5 !px-4">30d</button>
+          <button onclick="setSpRange(90)" id="sp-range-90" class="outpost-pill text-xs !py-1.5 !px-4">90d</button>
+        </div>
 
-    <!-- Content Approval Tab -->
-    <div id="content-content" class="tab-content">
-      <!-- Filters -->
-      <div class="flex flex-wrap gap-2 mb-4">
-        <button onclick="window.contentFilter='pending_approval'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30">⏳ Pending</button>
-        <button onclick="window.contentFilter='draft'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30">📝 Draft</button>
-        <button onclick="window.contentFilter='approved'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30">✅ Approved</button>
-        <button onclick="window.contentFilter='scheduled'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30">📅 Scheduled</button>
-        <button onclick="window.contentFilter='published'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30">🚀 Published</button>
-        <button onclick="window.contentFilter='rejected'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30">❌ Rejected</button>
-        <button onclick="window.contentFilter='all'; window.loadContentQueue()" class="content-filter-btn px-3 py-1.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30">📋 All</button>
-        <select id="contentPlatformFilter" onchange="window.loadContentQueue()" class="px-3 py-1.5 rounded text-xs bg-gray-800 border border-gray-600 text-gray-300">
-          <option value="all">All Platforms</option>
-          <option value="twitter">Twitter</option>
-          <option value="linkedin">LinkedIn</option>
-          <option value="instagram">Instagram</option>
-          <option value="reddit">Reddit</option>
-          <option value="facebook">Facebook</option>
-          <option value="tiktok">TikTok</option>
-          <option value="youtube">YouTube</option>
-          <option value="threads">Threads</option>
-          <option value="newsletter">Newsletter</option>
-        </select>
+        <!-- Attribution Funnel -->
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-3 flex items-center"><span class="mr-2">🔗</span> Attribution Funnel</h2>
+          <div id="spFunnel" class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="skeleton h-24"></div>
+          </div>
+        </section>
+
+        <!-- Channel Summary -->
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-3 flex items-center"><span class="mr-2">📡</span> Channel Summary</h2>
+          <div id="spChannels" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="skeleton h-32"></div><div class="skeleton h-32"></div><div class="skeleton h-32"></div>
+          </div>
+        </section>
+
+        <!-- Top Articles -->
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-3 flex items-center"><span class="mr-2">📰</span> Top Articles by Conversion</h2>
+          <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div id="spArticles" class="space-y-3"><div class="skeleton h-16"></div><div class="skeleton h-16"></div></div>
+          </div>
+        </section>
+
+        <!-- Daily Trend -->
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-3 flex items-center"><span class="mr-2">📈</span> Daily Article Reads</h2>
+          <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="h-64"><canvas id="spTrendCanvas"></canvas></div>
+          </div>
+        </section>
       </div>
 
-      <!-- Stats bar -->
-      <div id="contentStats" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+      <!-- ===== INSIGHTS SUB-VIEW ===== -->
+      <div id="outpost-insights" class="outpost-sub">
+        <div id="insightsContainer">
+          <div class="skeleton h-48"></div>
+        </div>
       </div>
 
-      <!-- Upcoming Schedule Timeline -->
-      <div id="contentTimeline" class="mb-4 hidden">
-        <h3 class="text-sm font-semibold text-purple-400 mb-2">📅 Upcoming Schedule</h3>
-        <div id="timelineItems" class="flex gap-3 overflow-x-auto pb-2"></div>
-      </div>
-
-      <!-- Content list -->
-      <div id="contentList" class="space-y-3">
-        <div class="text-gray-400 text-sm">Select a filter to load content...</div>
-      </div>
-
-      <!-- Refresh -->
-      <div class="mt-6 text-center">
-        <button onclick="window.loadContentQueue()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">
-          🔄 Refresh Content Queue
-        </button>
-      </div>
-    </div><!-- End Content Tab -->
+    </div><!-- End Outpost Tab -->
 
     <!-- Diagrams tab navigates to /asciiflow/index.html (full-screen AviFlow) -->
 
