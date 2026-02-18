@@ -2907,8 +2907,8 @@
           const slideCount = item.media_urls.length;
           const carouselId = 'carousel-' + item.id.substring(0, 8);
           mediaHtml = `
-            <div class="relative">
-              <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory gap-0 scrollbar-hide" style="scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none;">
+            <div class="relative group">
+              <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory gap-0 scrollbar-hide" style="scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none;" onscroll="updateCarouselDots('${carouselId}', ${slideCount})">
                 ${item.media_urls.map((url, idx) => `
                   <div class="flex-shrink-0 w-full snap-center relative" style="scroll-snap-align: center;">
                     <img src="${escapeHtml(url)}" class="w-full object-cover" style="aspect-ratio: 4/5; max-height: 260px;" onerror="this.parentElement.innerHTML='<div class=\\'bg-gray-900 flex items-center justify-center text-gray-600 text-xs\\' style=\\'aspect-ratio:4/5;max-height:260px\\'>📷 Slide ${idx+1}</div>'">
@@ -2917,9 +2917,12 @@
                   </div>
                 `).join('')}
               </div>
+              <!-- Nav arrows -->
+              <button onclick="scrollCarousel('${carouselId}', -1)" class="absolute left-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity">‹</button>
+              <button onclick="scrollCarousel('${carouselId}', 1)" class="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity">›</button>
               <!-- Dot indicators -->
-              <div class="flex justify-center gap-1.5 py-2">
-                ${item.media_urls.map((_, idx) => `<div class="w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-blue-400' : 'bg-gray-600'}"></div>`).join('')}
+              <div id="${carouselId}-dots" class="flex justify-center gap-1.5 py-2">
+                ${item.media_urls.map((_, idx) => `<div class="w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-blue-400' : 'bg-gray-600'} transition-colors"></div>`).join('')}
               </div>
             </div>`;
         } else {
@@ -3483,6 +3486,23 @@
     }
 
     window.switchOutpostTab = switchOutpostTab;
+    // Carousel navigation
+    window.scrollCarousel = function(carouselId, dir) {
+      const el = document.getElementById(carouselId);
+      if (!el) return;
+      const slideW = el.offsetWidth;
+      el.scrollBy({ left: dir * slideW, behavior: 'smooth' });
+    };
+    window.updateCarouselDots = function(carouselId, count) {
+      const el = document.getElementById(carouselId);
+      const dots = document.getElementById(carouselId + '-dots');
+      if (!el || !dots) return;
+      const idx = Math.round(el.scrollLeft / el.offsetWidth);
+      dots.querySelectorAll('div').forEach((d, i) => {
+        d.className = 'w-1.5 h-1.5 rounded-full transition-colors ' + (i === idx ? 'bg-blue-400' : 'bg-gray-600');
+      });
+    };
+
     window.loadOutpost = loadOutpost;
     window.calNavigate = calNavigate;
     window.calCellClick = calCellClick;
