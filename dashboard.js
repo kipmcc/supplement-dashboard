@@ -2991,6 +2991,20 @@
         formatBadge = `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-700 text-gray-300">${fmt}${extra}</span>`;
       }
 
+      // Category badge
+      const categoryLabels = {
+        clinical_breakdown: { label: '🔬 Clinical Breakdown', color: 'text-cyan-400 bg-cyan-500/20' },
+        longevity_daily: { label: '📰 Longevity Daily', color: 'text-amber-400 bg-amber-500/20' },
+        research_hub: { label: '📚 Research Hub', color: 'text-blue-400 bg-blue-500/20' },
+        aviscore_spotlight: { label: '⭐ AviScore Spotlight', color: 'text-yellow-400 bg-yellow-500/20' },
+        brand_culture: { label: '💜 Brand & Culture', color: 'text-purple-400 bg-purple-500/20' },
+      };
+      const catInfo = categoryLabels[item.category] || null;
+      const categoryBadge = catInfo ? `<span class="px-2 py-0.5 rounded-full text-xs ${catInfo.color}">${catInfo.label}</span>` : '';
+
+      // PMID badge
+      const pmidBadge = item.source_pubmed_id ? `<a href="https://pubmed.ncbi.nlm.nih.gov/${escapeHtml(item.source_pubmed_id)}/" target="_blank" class="px-2 py-0.5 rounded-full text-xs bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors">📄 PMID ${escapeHtml(item.source_pubmed_id)}</a>` : '';
+
       // Hashtags
       const hashtagsHtml = (item.hashtags && item.hashtags.length) ?
         `<div class="flex flex-wrap gap-1 mt-2">${item.hashtags.map(h => `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-700/80 text-blue-300">${escapeHtml(h)}</span>`).join('')}</div>` : '';
@@ -3030,6 +3044,8 @@
               <span class="text-2xl">${ps.icon}</span>
               <span class="font-bold text-sm" style="color: ${ps.color}">${ps.name}</span>
               ${formatBadge}
+              ${categoryBadge}
+              ${pmidBadge}
               ${charCountBadge(item.body, item.platform)}
             </div>
             <div class="flex items-center gap-2">
