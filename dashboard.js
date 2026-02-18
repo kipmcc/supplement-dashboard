@@ -2843,7 +2843,7 @@
         const contentIds = items.map(i => i.id);
         await loadContentMessageCounts(contentIds);
 
-        container.innerHTML = items.map(item => renderContentCard(item)).join('');
+        container.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">' + items.map(item => renderContentCard(item)).join('') + '</div>';
 
         // Re-expand threads that were open
         for (const cid of expandedContentThreads) {
@@ -2893,18 +2893,49 @@
     function renderPlatformPreview(item, ps) {
       const body = escapeHtml((item.body || '').substring(0, 300));
       const truncated = (item.body || '').length > 300 ? '<span class="text-gray-500">…</span>' : '';
-      const imgThumb = item.image_url ? `<div class="mt-2 rounded overflow-hidden" style="max-height:120px"><img src="${escapeHtml(item.image_url)}" class="w-full object-cover rounded" style="max-height:120px" onerror="this.style.display='none'"></div>` : '';
+      const imgThumb = item.image_url ? `<div class="mt-2 rounded overflow-hidden" style="max-height:200px"><img src="${escapeHtml(item.image_url)}" class="w-full object-cover rounded" style="max-height:200px" onerror="this.style.display='none'"></div>` : '';
 
       if (item.platform === 'instagram') {
+        // Determine account handle from metadata
+        const igHandle = (item.metadata && item.metadata.account) ? item.metadata.account.replace('@','') : 'maureenvalecmo';
+        const igInitial = igHandle[0].toUpperCase();
+
+        // Carousel: show all slides with horizontal scroll + slide indicators
+        let mediaHtml = '';
+        if (item.format === 'carousel' && item.media_urls && item.media_urls.length > 1) {
+          const slideTitles = (item.metadata && item.metadata.slide_titles) || [];
+          const slideCount = item.media_urls.length;
+          const carouselId = 'carousel-' + item.id.substring(0, 8);
+          mediaHtml = `
+            <div class="relative">
+              <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory gap-0 scrollbar-hide" style="scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none;">
+                ${item.media_urls.map((url, idx) => `
+                  <div class="flex-shrink-0 w-full snap-center relative" style="scroll-snap-align: center;">
+                    <img src="${escapeHtml(url)}" class="w-full object-cover" style="aspect-ratio: 4/5; max-height: 260px;" onerror="this.parentElement.innerHTML='<div class=\\'bg-gray-900 flex items-center justify-center text-gray-600 text-xs\\' style=\\'aspect-ratio:4/5;max-height:260px\\'>📷 Slide ${idx+1}</div>'">
+                    <div class="absolute top-2 right-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full">${idx+1}/${slideCount}</div>
+                    ${slideTitles[idx] ? `<div class="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full">${escapeHtml(slideTitles[idx])}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+              <!-- Dot indicators -->
+              <div class="flex justify-center gap-1.5 py-2">
+                ${item.media_urls.map((_, idx) => `<div class="w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-blue-400' : 'bg-gray-600'}"></div>`).join('')}
+              </div>
+            </div>`;
+        } else {
+          mediaHtml = imgThumb || '<div class="bg-gray-900 h-28 flex items-center justify-center text-gray-600 text-xs">📷 Image preview</div>';
+        }
+
         return `<div class="bg-black rounded-lg border border-gray-700 overflow-hidden mt-2">
           <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
-            <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-[8px]">M</div>
-            <span class="text-xs font-semibold text-white">maureenvalecmo</span>
+            <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-[8px] text-white font-bold">${igInitial}</div>
+            <span class="text-xs font-semibold text-white">${escapeHtml(igHandle)}</span>
+            ${item.format === 'carousel' ? '<span class="text-[10px] text-gray-500 ml-auto">📑 carousel</span>' : ''}
           </div>
-          ${imgThumb || '<div class="bg-gray-900 h-28 flex items-center justify-center text-gray-600 text-xs">📷 Image preview</div>'}
+          ${mediaHtml}
           <div class="px-3 py-2">
             <div class="flex gap-3 text-gray-400 text-sm mb-1.5">♡ 💬 ➤</div>
-            <div class="text-xs text-gray-300 leading-relaxed"><b class="text-white">maureenvalecmo</b> ${body}${truncated}</div>
+            <div class="text-xs text-gray-300 leading-relaxed"><b class="text-white">${escapeHtml(igHandle)}</b> ${body}${truncated}</div>
           </div>
         </div>`;
       }
