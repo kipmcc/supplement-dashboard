@@ -2911,7 +2911,7 @@
               <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory gap-0 scrollbar-hide" style="scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none;" onscroll="updateCarouselDots('${carouselId}', ${slideCount})">
                 ${item.media_urls.map((url, idx) => `
                   <div class="flex-shrink-0 w-full snap-center relative" style="scroll-snap-align: center;">
-                    <img src="${escapeHtml(url)}" class="w-full object-cover" style="aspect-ratio: 4/5; max-height: 260px;" onerror="this.parentElement.innerHTML='<div class=\\'bg-gray-900 flex items-center justify-center text-gray-600 text-xs\\' style=\\'aspect-ratio:4/5;max-height:260px\\'>📷 Slide ${idx+1}</div>'">
+                    <img src="${escapeHtml(url)}" class="w-full object-contain" style="aspect-ratio: 4/5; background: #000;" onerror="this.parentElement.innerHTML='<div class=\\'bg-gray-900 flex items-center justify-center text-gray-600 text-xs\\' style=\\'aspect-ratio:4/5\\'>📷 Slide ${idx+1}</div>'">
                     <div class="absolute top-2 right-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full">${idx+1}/${slideCount}</div>
                     ${slideTitles[idx] ? `<div class="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full">${escapeHtml(slideTitles[idx])}</div>` : ''}
                   </div>
