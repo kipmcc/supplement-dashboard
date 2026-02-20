@@ -20,6 +20,12 @@
    - `AI_README.md` (timestamp + description of change)
    - Commit both with your code changes
 
+4. **Before ANY code change or deploy**, pull latest from origin:
+   ```bash
+   cd supplement-dashboard && git fetch && git pull
+   ```
+   Deploying without pulling overwrites other agents' work. This has already caused production data loss (Outpost tab wiped on 2026-02-18). No exceptions.
+
 Skipping these steps leads to drift, broken assumptions, and wasted work. Do not skip them.
 
 ---
