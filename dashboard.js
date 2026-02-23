@@ -1256,6 +1256,45 @@
     }
 
     // Render task queue UI
+    // Group tasks so that tasks sharing the same project_key are clustered together.
+    // Each group is positioned by the best (lowest) priority in that group.
+    // Tasks without a project_key remain as individual items.
+    function groupTasksByProject(tasks) {
+      const projectGroups = {};  // projectKey -> { minPriority, minCreated, tasks[] }
+      const ungrouped = [];
+
+      for (const task of tasks) {
+        if (task.project_key) {
+          if (!projectGroups[task.project_key]) {
+            projectGroups[task.project_key] = { minPriority: task.priority || 99, minCreated: task.created_at, tasks: [] };
+          }
+          const g = projectGroups[task.project_key];
+          g.tasks.push(task);
+          if ((task.priority || 99) < g.minPriority) {
+            g.minPriority = task.priority || 99;
+            g.minCreated = task.created_at;
+          }
+        } else {
+          ungrouped.push(task);
+        }
+      }
+
+      // Build a flat list of groups (each group is either a project cluster or a single ungrouped task)
+      const result = [];
+      for (const [key, g] of Object.entries(projectGroups)) {
+        // Sort tasks within each project group by priority then created_at
+        g.tasks.sort((a, b) => (a.priority || 99) - (b.priority || 99) || (a.created_at || '').localeCompare(b.created_at || ''));
+        result.push({ projectKey: key, minPriority: g.minPriority, minCreated: g.minCreated, tasks: g.tasks });
+      }
+      for (const task of ungrouped) {
+        result.push({ projectKey: null, minPriority: task.priority || 99, minCreated: task.created_at, tasks: [task] });
+      }
+
+      // Sort groups by minPriority, then by earliest created_at
+      result.sort((a, b) => a.minPriority - b.minPriority || (a.minCreated || '').localeCompare(b.minCreated || ''));
+      return result;
+    }
+
     function renderTaskQueue(tasks) {
       const container = document.getElementById('taskQueueContainer');
       if (!container) return;
@@ -1312,8 +1351,21 @@
             <div class="space-y-2">
         `;
 
-        for (const task of ownerTasks) {
-          html += renderSingleTaskCard(task, agentInfo);
+        // Group tasks by project_key so related tasks stay together
+        const grouped = groupTasksByProject(ownerTasks);
+        for (const group of grouped) {
+          if (group.projectKey && group.tasks.length > 1) {
+            const projTitle = projectLookup[group.projectKey] || group.projectKey;
+            html += `<div class="ml-0 mb-1 mt-3 first:mt-0"><div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-1"><span class="text-gray-600">📁</span> ${escapeHtml(projTitle)}</div><div class="space-y-2 border-l-2 border-gray-700 pl-3">`;
+            for (const task of group.tasks) {
+              html += renderSingleTaskCard(task, agentInfo);
+            }
+            html += '</div></div>';
+          } else {
+            for (const task of group.tasks) {
+              html += renderSingleTaskCard(task, agentInfo);
+            }
+          }
         }
 
         html += '</div></div>';
