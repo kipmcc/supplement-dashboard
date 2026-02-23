@@ -448,6 +448,19 @@ window.loadOngoingTasks();
 
 ---
 
+## Project Grouping in Task List
+
+Tasks sharing the same `project_key` are **automatically clustered together** in the task list. This ensures related tasks (e.g., Phase 0, Phase 1, Phase 2 of the same project) appear adjacent rather than scattered across the list.
+
+**How it works:**
+- Tasks with the same `project_key` are grouped into a visual cluster with a `📁 Project Name` header and a left border
+- The group is positioned in the list by its highest-priority (lowest number) task
+- Within each group, tasks are sorted by priority then created_at
+- Tasks without a `project_key` are sorted normally between groups
+- Single-task "groups" (only one task in a project) render without the header/border
+
+This grouping is implemented by `groupTasksByProject()` in `dashboard.js`.
+
 ## Project Badge on Task Cards
 
 When a task has a `project_key`, the card displays a **project badge** showing the parent project's title (resolved via `projectLookup`). This provides at-a-glance context for which project a task belongs to. Clicking the badge navigates to the Projects tab filtered to that project.
