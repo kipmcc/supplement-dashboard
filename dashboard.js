@@ -91,6 +91,7 @@
         loadOverviewMetrics(),
         loadCoverageMetrics(),
         loadCertificationCoverage(),
+        loadIngredientEngineMetrics(),
         loadTopBrands(),
         loadDataGaps(),
         loadRecentActivity()
@@ -208,6 +209,104 @@
         console.error('Error loading fleet status:', error);
         document.getElementById('fleetTotalProducts').textContent = '--';
         document.getElementById('fleetTotalProducts').classList.remove('loading');
+      }
+    }
+
+    // Load Ingredient Engine Metrics
+    async function loadIngredientEngineMetrics() {
+      try {
+        // 1. Canonical products counts
+        const [
+          { count: totalProducts },
+          { count: withFacts },
+          { count: withIngredients }
+        ] = await Promise.all([
+          supabase.from('canonical_products').select('*', { count: 'exact', head: true }),
+          supabase.from('canonical_products').select('*', { count: 'exact', head: true }).not('supplement_facts', 'is', null),
+          supabase.from('canonical_products').select('*', { count: 'exact', head: true }).not('ingredients', 'is', null)
+        ]);
+
+        // 2. Product ingredients
+        const { count: totalLinks } = await supabase.from('product_ingredients').select('*', { count: 'exact', head: true });
+        const { data: distinctData } = await supabase.rpc('count_distinct_product_ingredients');
+        const distinctProducts = distinctData || 0;
+
+        // 3. Ingredients table
+        const [
+          { count: totalIngredients },
+          { count: normalizedCount },
+          { count: verifiedCount }
+        ] = await Promise.all([
+          supabase.from('ingredients').select('*', { count: 'exact', head: true }),
+          supabase.from('ingredients').select('*', { count: 'exact', head: true }).not('normalized_name', 'is', null),
+          supabase.from('ingredients').select('*', { count: 'exact', head: true }).eq('verified', true)
+        ]);
+
+        // 4. Evidence summary
+        const { count: evidenceRows } = await supabase.from('ingredient_evidence_summary').select('*', { count: 'exact', head: true });
+
+        // Calculate percentages
+        const parsingPct = totalProducts ? ((withIngredients / totalProducts) * 100).toFixed(1) : '0';
+        const normPct = totalIngredients ? ((normalizedCount / totalIngredients) * 100).toFixed(1) : '0';
+        const linkPct = totalProducts ? ((distinctProducts / totalProducts) * 100).toFixed(1) : '0';
+        const factsPct = totalProducts ? ((withFacts / totalProducts) * 100).toFixed(1) : '0';
+
+        // Update stat cards
+        const el = (id) => document.getElementById(id);
+
+        el('ieParsing').textContent = parsingPct + '%';
+        el('ieParsing').classList.remove('loading');
+        el('ieParsing').className = el('ieParsing').className.replace(/text-(green|yellow|red)-400/g, '');
+        el('ieParsing').classList.add(parseFloat(parsingPct) >= 80 ? 'text-green-400' : parseFloat(parsingPct) >= 50 ? 'text-yellow-400' : 'text-red-400');
+        el('ieParsingDetail').textContent = `${(withIngredients || 0).toLocaleString()} / ${(totalProducts || 0).toLocaleString()} products`;
+
+        el('ieNormalization').textContent = normPct + '%';
+        el('ieNormalization').classList.remove('loading');
+        el('ieNormalizationDetail').textContent = `${(normalizedCount || 0).toLocaleString()} / ${(totalIngredients || 0).toLocaleString()} ingredients`;
+
+        el('ieLinks').textContent = (totalLinks || 0).toLocaleString();
+        el('ieLinks').classList.remove('loading');
+        el('ieLinksDetail').textContent = `${(distinctProducts || 0).toLocaleString()} products (${linkPct}% of catalog)`;
+
+        el('ieEvidence').textContent = (evidenceRows || 0).toLocaleString();
+        el('ieEvidence').classList.remove('loading');
+        el('ieEvidenceDetail').textContent = `${(verifiedCount || 0).toLocaleString()} verified ingredients`;
+
+        // Alert banner
+        if (parseFloat(parsingPct) < 50) {
+          el('ieAlertBanner').classList.remove('hidden');
+        }
+
+        // Pipeline progress bar (3 segments shown as one graduated bar using the lowest metric)
+        const stages = [
+          { pct: parseFloat(factsPct), label: 'supplement_facts' },
+          { pct: parseFloat(parsingPct), label: 'ingredients_parsed' },
+          { pct: parseFloat(linkPct), label: 'product_ingredient_links' }
+        ];
+
+        const colorFor = (p) => p >= 80 ? 'bg-green-500' : p >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+
+        // Show 3 stacked segments in the bar
+        const barContainer = el('ieBarFacts');
+        barContainer.style.width = '100%';
+        barContainer.innerHTML = '';
+        barContainer.className = 'h-full flex';
+        stages.forEach((s, i) => {
+          const seg = document.createElement('div');
+          seg.className = `${colorFor(s.pct)} h-full transition-all duration-500`;
+          seg.style.width = (s.pct / stages.length) + '%';
+          seg.title = `${s.label}: ${s.pct}%`;
+          if (i > 0) seg.style.marginLeft = '2px';
+          barContainer.appendChild(seg);
+        });
+
+        el('iePipelineLabels').innerHTML = stages.map(s => {
+          const color = s.pct >= 80 ? 'text-green-400' : s.pct >= 50 ? 'text-yellow-400' : 'text-red-400';
+          return `<span class="${color}">${s.label}: ${s.pct}%</span>`;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error loading Ingredient Engine metrics:', error);
       }
     }
 

@@ -229,6 +229,52 @@
       </div>
     </section>
 
+    <!-- Section 4: Ingredient Engine Monitoring -->
+    <section class="mb-8">
+      <h2 class="text-xl font-semibold mb-4 flex items-center">
+        <span class="mr-2">🧪</span> Ingredient Engine
+      </h2>
+      <div id="ieAlertBanner" class="hidden mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg text-red-300 text-sm font-medium">
+        ⚠️ Parsing coverage has dropped below 50% — investigate ingredient parsing pipeline.
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4">
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Parsing Coverage</div>
+          <div id="ieParsing" class="text-xl sm:text-3xl font-bold text-yellow-400 loading">...</div>
+          <div id="ieParsingDetail" class="text-xs text-gray-500">Loading...</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Normalization Rate</div>
+          <div id="ieNormalization" class="text-xl sm:text-3xl font-bold text-green-400 loading">...</div>
+          <div id="ieNormalizationDetail" class="text-xs text-gray-500">Loading...</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Ingredient-Product Links</div>
+          <div id="ieLinks" class="text-xl sm:text-3xl font-bold text-cyan-400 loading">...</div>
+          <div id="ieLinksDetail" class="text-xs text-gray-500">Loading...</div>
+        </div>
+        <div class="metric-card bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+          <div class="text-gray-400 text-xs sm:text-sm">Evidence Coverage</div>
+          <div id="ieEvidence" class="text-xl sm:text-3xl font-bold text-purple-400 loading">...</div>
+          <div id="ieEvidenceDetail" class="text-xs text-gray-500">Loading...</div>
+        </div>
+      </div>
+      <!-- Pipeline Progress Bar -->
+      <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div class="text-sm text-gray-400 mb-2">Parsing Pipeline Progress</div>
+        <div class="flex items-center gap-2 mb-2">
+          <div class="flex-1 bg-gray-700 rounded-full h-5 overflow-hidden flex">
+            <div id="ieBarFacts" class="h-full transition-all duration-500" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="iePipelineLabels" class="flex justify-between text-xs text-gray-500">
+          <span>supplement_facts: —</span>
+          <span>ingredients_parsed: —</span>
+          <span>product_ingredient_links: —</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Section 5: Top Brands Metrics -->
     <section class="mb-8">
       <h2 class="text-xl font-semibold mb-4 flex items-center">
